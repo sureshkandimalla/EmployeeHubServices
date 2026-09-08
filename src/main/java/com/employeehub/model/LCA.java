@@ -26,6 +26,7 @@ public class LCA {
   private LocalDate lcaPostedToDate;
   private String socCode;
   private Long lcaWage;
+  private String wageLevel;
   private String mangerId;
   private String jobLocation;
   private String jobLocation2;

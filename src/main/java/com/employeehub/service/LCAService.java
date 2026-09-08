@@ -37,6 +37,7 @@ public class LCAService {
             existing.setLcaPostedToDate(lca.getLcaPostedToDate());
             existing.setSocCode(lca.getSocCode());
             existing.setLcaWage(lca.getLcaWage());
+            existing.setWageLevel(lca.getWageLevel());
             existing.setMangerId(lca.getMangerId());
             existing.setJobLocation(lca.getJobLocation());
             existing.setJobLocation2(lca.getJobLocation2());
