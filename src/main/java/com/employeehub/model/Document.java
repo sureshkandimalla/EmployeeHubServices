@@ -34,4 +34,13 @@ public class Document {
   private Long sizeBytes;
   private String uploadedBy;
   private LocalDateTime uploadedDate;
+
+  // What kind of document this is (Visa, H1B, Passport, I94, Education,
+  // Other, ...) — a free string rather than a Java enum so the list of
+  // categories can grow without a migration; the frontend owns the
+  // dropdown's option list.
+  private String documentType;
+
+  @Column(columnDefinition = "TEXT")
+  private String description;
 }

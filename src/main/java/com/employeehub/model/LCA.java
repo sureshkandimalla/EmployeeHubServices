@@ -44,6 +44,13 @@ public class LCA {
   @JoinColumn(name = "employee_id", referencedColumnName = "employee_id", nullable = true)
   private Employee employee;
 
+  // UI-only: the Employee select on the LCA form sends a plain employeeId
+  // rather than a full Employee object — LCAService resolves this into the
+  // `employee` relation above via a real lookup, rather than relying on
+  // Jackson to deserialize a partial Employee from just an ID.
+  @Transient
+  private Long employeeId;
+
   @JsonIgnoreProperties("lca")
   @OneToOne(mappedBy = "lca", fetch = FetchType.LAZY, optional = true)
   private Visa visa;

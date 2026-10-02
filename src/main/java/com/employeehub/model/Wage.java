@@ -19,6 +19,18 @@ public class Wage {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private long wageId;
+
+  // Read-only mirror of the project_id column — the FK is actually owned
+  // from the other side (Project.billRates' @JoinColumn(name = "projectId")),
+  // so this column exists on the table but was never mapped as a field
+  // here. Needed to resolve a WorkOrderPO document's owning Project/
+  // Employee without a second query (see DocumentService#resolveRootFolder).
+  // Must reuse the exact logical name "projectId" the Project side already
+  // registered — Hibernate treats a different logical name resolving to
+  // the same physical column as a duplicate mapping and refuses to start.
+  @Column(name = "projectId", insertable = false, updatable = false)
+  private Long projectId;
+
   private float wage;
   private String wageType;
   private LocalDate startDate;
