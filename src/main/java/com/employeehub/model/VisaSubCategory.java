@@ -4,7 +4,11 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 public enum VisaSubCategory {
+    EXTENSION("Extension"),
+    AMENDMENT_EXTENSION("Amendment + Extension"),
+    AMENDMENT("Amendment"),
     TRANSFER("Transfer"),
+    CONCURRENT("Concurrent"),
     CAP("CAP"),
     TRANSFER_INDIA("Transfer-India");
 

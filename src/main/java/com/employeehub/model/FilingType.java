@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 public enum FilingType {
+    REGULAR("Regular"),
     TRANSFER("Transfer"),
     CONSULAR("Consular"),
     COS("Change of Status");
