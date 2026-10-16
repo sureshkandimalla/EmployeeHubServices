@@ -14,6 +14,11 @@ public class Bills {
   private Long BillId;
 
   private Long invoiceId;
+  // The invoice's own human-readable number (Invoice.invoiceNumber) — not
+  // set by the model.Bills constructor below since a bill only stores the
+  // invoice's id; the controller resolves and sets this separately via a
+  // batch invoice lookup.
+  private Long invoiceNumber;
   private Long assignmentId;
   private LocalDate invoiceMonth;
   private float billing; //assignment wage

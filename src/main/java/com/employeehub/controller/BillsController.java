@@ -7,7 +7,10 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.employeehub.domain.BasicEmployee;
+import com.employeehub.model.Invoice;
+import com.employeehub.repository.InvoiceRepository;
 import com.employeehub.service.EmployeeService;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,8 +43,24 @@ public class BillsController {
     private BillsService billsService;
     @Autowired
     private EmployeeService employeeService;
-	
-	
+    @Autowired
+    private InvoiceRepository invoiceRepository;
+
+    // Each bill only stores its invoice's id, not the invoice's own
+    // human-readable number — resolve it with one batch lookup rather than
+    // a query per bill.
+    private void setInvoiceNumbers(List<com.employeehub.domain.Bills> bills) {
+        List<Long> invoiceIds = bills.stream()
+                .map(com.employeehub.domain.Bills::getInvoiceId)
+                .filter(id -> id != null)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, Long> invoiceNumbersById = invoiceRepository.findAllById(invoiceIds).stream()
+                .collect(Collectors.toMap(Invoice::getId, Invoice::getInvoiceNumber));
+        bills.forEach(bill -> bill.setInvoiceNumber(invoiceNumbersById.get(bill.getInvoiceId())));
+    }
+
+
     @PostMapping
 	public ResponseEntity<Bills> createBill(@RequestBody Bills bill) throws BillsException {
 		Bills savedBill = billsService.createBill(bill);
@@ -107,6 +126,7 @@ public class BillsController {
                             .orElse("Unknown"));
                     logger.info("bills:: "+ bills);
         }   );
+        setInvoiceNumbers(domainBillsList);
         logger.info("billsList:: "+ domainBillsList);
         return billsList.map(bills -> ResponseEntity.ok(domainBillsList))
                 .orElse(null);
@@ -127,6 +147,7 @@ public class BillsController {
                     .orElse("Unknown"));
             logger.info("bills:: "+ bills);
         }   );
+        setInvoiceNumbers(domainBillsList);
         logger.info("billsList:: "+ domainBillsList);
         return billsList.map(bills -> ResponseEntity.ok(domainBillsList))
                 .orElse(null);
