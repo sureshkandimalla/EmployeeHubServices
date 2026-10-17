@@ -1,10 +1,12 @@
 package com.employeehub;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.controller.EmployeeController;
 import com.employeehub.model.Employee;
 import com.employeehub.repository.EmployeeRepository;
 import com.employeehub.service.EmployeeService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +46,7 @@ class EmployeeControllerSortTest {
 
     @BeforeEach
     void setUp() {
+        CurrentUserContext.set("test@example.com", "ADMIN");
         mockMvc = MockMvcBuilders.standaloneSetup(employeeController).build();
         objectMapper = new ObjectMapper();
 
@@ -58,6 +61,11 @@ class EmployeeControllerSortTest {
 
         // Intentionally out of order — simulating Hibernate's return after OneToMany JOIN
         unorderedEmployees = Arrays.asList(emp8, emp1, emp13, emp3, emp101, emp2, emp112, emp5);
+    }
+
+    @AfterEach
+    void tearDown() {
+        CurrentUserContext.clear();
     }
 
     // ── getAllEmployees ──────────────────────────────────────────────────────────

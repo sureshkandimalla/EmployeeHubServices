@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.repository.AssignmentRepository;
 import com.employeehub.service.AssignmentService;
 
@@ -65,6 +66,7 @@ public class AssignmentController {
     // Create assignment rest api
     @PostMapping("/assignments")
     public ResponseEntity<?> createAssignment(@RequestBody Assignment assignment) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         // employeeId is a primitive long, so a request that omits it
         // deserializes to 0 instead of failing loudly — that's an invalid
         // employee id, not a real one, so reject it here rather than save
@@ -96,11 +98,7 @@ public class AssignmentController {
         List<com.employeehub.domain.Assignment> x=assignmentRepository.findAssignmentsForProject(projectId).stream().map(result->new com.employeehub.domain.Assignment(
                 (String) result[0],(String) result[1],(BigInteger) result[2],(Float) result[3]
                 ,(String)result[4],(String)result[5],(Date)result[6],(Date)result[7],(Date)result[8])
-        ).collect(Collectors.toList());;
-        System.out.println(x);
-
-      //  var assignment = assignmentRepository.findAssignmentsForProject(projectId)
-               // .orElseThrow(() -> new ResourceNotFoundException("Assignment not exist with id :" + projectId));
+        ).collect(Collectors.toList());
         return ResponseEntity.ok(x);
     }
 
@@ -182,6 +180,7 @@ public class AssignmentController {
     // when actually present in the request body.
     @PutMapping("/assignments/{id}")
     public ResponseEntity<Assignment> updateAssignment(@PathVariable Long id, @RequestBody Assignment assignmentDetails) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         Assignment assignment = assignmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment not exist with id :" + id));
 
@@ -209,6 +208,7 @@ public class AssignmentController {
     // Delete assignment rest api
     @DeleteMapping("/assignments/{id}")
     public ResponseEntity<Map<String, Boolean>> deleteAssignment(@PathVariable Long id) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         Assignment assignment = assignmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment not exist with id :" + id));
 

@@ -21,4 +21,9 @@ public class BeanEMSException {
 	        return new ResponseEntity<>(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
 	    }
 
+	 @ExceptionHandler(DataNotSavedException.class)
+	    public ResponseEntity<String> handleDataNotSavedException(DataNotSavedException ex) {
+	        return new ResponseEntity<>(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+	    }
+
 }

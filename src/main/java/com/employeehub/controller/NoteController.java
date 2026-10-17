@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.model.Note;
 import com.employeehub.repository.NoteRepository;
@@ -21,17 +22,20 @@ public class NoteController {
 
     @GetMapping
     public ResponseEntity<List<Note>> list(@RequestParam String type, @RequestParam Long entityId) {
+        CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
         return ResponseEntity.ok(noteRepository.findByTypeAndEntityIdOrderByDateDesc(type, entityId));
     }
 
     @PostMapping
     public ResponseEntity<Note> create(@RequestBody Note note) {
+        CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
         note.setNoteId(null); // always a new row — never trust a client-supplied id here
         return new ResponseEntity<>(noteRepository.save(note), HttpStatus.CREATED);
     }
 
     @PutMapping("/{noteId}")
     public ResponseEntity<Note> update(@PathVariable Long noteId, @RequestBody Note noteDetails) {
+        CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
         Note existing = noteRepository.findById(noteId)
                 .orElseThrow(() -> new ResourceNotFoundException("Note not found with id: " + noteId));
         existing.setDescription(noteDetails.getDescription());
@@ -40,6 +44,7 @@ public class NoteController {
 
     @DeleteMapping("/{noteId}")
     public ResponseEntity<Void> delete(@PathVariable Long noteId) {
+        CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
         noteRepository.deleteById(noteId);
         return ResponseEntity.noContent().build();
     }

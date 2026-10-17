@@ -52,9 +52,6 @@ class VisaServiceTest {
         employee.setFirstName("John");
         employee.setLastName("Doe");
 
-        // default stubbing for employee lookup used by resolveRelations
-        when(employeeRepository.findById(1L)).thenReturn(Optional.of(employee));
-
         visa1 = makeVisa(101L, "H1B", "REC-001", employee, LocalDate.of(2023, 1, 1), LocalDate.of(2026, 1, 1));
         visa2 = makeVisa(102L, "H1B", "REC-002", employee, LocalDate.of(2024, 6, 1), LocalDate.of(2027, 6, 1));
     }
@@ -161,6 +158,7 @@ class VisaServiceTest {
     void saveVisa_success() {
         // ensure create path (id == 0) so updateVisa isn't called
         visa1.setVisaId(0L);
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(employee));
         when(visaRepository.save(visa1)).thenReturn(visa1);
 
         Visa result = visaService.saveVisa(visa1);
@@ -178,6 +176,7 @@ class VisaServiceTest {
         lca.setLcaId(201L);
         visa1.setLca(lca);
 
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(employee));
         when(lcaRepository.findById(201L)).thenReturn(Optional.of(lca));
         when(visaRepository.save(visa1)).thenReturn(visa1);
 
@@ -192,6 +191,7 @@ class VisaServiceTest {
     void saveVisa_withoutLca() {
         visa1.setVisaId(0L);
         visa1.setLca(null);
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(employee));
         when(visaRepository.save(visa1)).thenReturn(visa1);
 
         Visa result = visaService.saveVisa(visa1);

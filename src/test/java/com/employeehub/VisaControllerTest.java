@@ -1,5 +1,6 @@
 package com.employeehub;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.controller.VisaController;
 import com.employeehub.model.Employee;
 import com.employeehub.model.LCA;
@@ -9,6 +10,7 @@ import com.employeehub.repository.PemployeeRepository;
 import com.employeehub.service.VisaService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,6 +55,7 @@ class VisaControllerTest {
 
     @BeforeEach
     void setUp() {
+        CurrentUserContext.set("test@example.com", "ADMIN");
         mockMvc = MockMvcBuilders.standaloneSetup(visaController)
                 .setValidator(new org.springframework.validation.Validator() {
                     @Override
@@ -78,6 +81,11 @@ class VisaControllerTest {
                 LocalDate.of(2023, 1, 1), LocalDate.of(2026, 1, 1));
         visa2 = makeVisa(102L, "H1B", "REC-002", employee,
                 LocalDate.of(2024, 6, 1), LocalDate.of(2027, 6, 1));
+    }
+
+    @AfterEach
+    void tearDown() {
+        CurrentUserContext.clear();
     }
 
     // ── GET /getAllVisas ──────────────────────────────────────────────────────────

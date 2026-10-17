@@ -1,5 +1,7 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
+import com.employeehub.exception.DataNotSavedException;
 import com.employeehub.model.Adjustment;
 import com.employeehub.repository.AdjustmentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,7 +24,7 @@ public class AdjustmentController {
 	
     @GetMapping("/getAdjustments")
 	public List<com.employeehub.domain.Adjustment> getAdjustments() {
-
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
     	return adjustmentRepository.findAllAdjustmentsWithNames().stream()
 				.map(com.employeehub.domain.Adjustment::new)
 				.collect(Collectors.toList());
@@ -30,7 +32,7 @@ public class AdjustmentController {
     }
 	@GetMapping("/findAdjustmentsByEmployeeId")
 	public List<com.employeehub.domain.Adjustment> findAdjustmentsByEmployeeId(@RequestParam(required = true) long id) {
-
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		return adjustmentRepository.findAdjustmentsByEmployeeId(id).stream()
 				.map(row -> {
 					com.employeehub.domain.Adjustment adjustment = new com.employeehub.domain.Adjustment(row);
@@ -43,14 +45,14 @@ public class AdjustmentController {
 
 	}
 	@PostMapping("/addAdjustment")
-	public ResponseEntity<Adjustment>  createInvoice(@RequestBody Adjustment adjustment) throws Exception {
-
+	public ResponseEntity<Adjustment> addAdjustment(@RequestBody Adjustment adjustment) throws DataNotSavedException {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		try {
 			 Adjustment newAdjustment=adjustmentRepository.save(adjustment);
 
 			return  ResponseEntity.ok(newAdjustment);
 		} catch (Exception e) {
-			throw new Exception("Adjustment data not saved", e);
+			throw new DataNotSavedException("Adjustment data not saved", e);
 		}
 	}
 }

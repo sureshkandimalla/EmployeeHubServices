@@ -1,5 +1,6 @@
 package com.employeehub;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.controller.EmployeeController;
 import com.employeehub.domain.Employee;
 import com.employeehub.exception.EmployeeServiceException;
@@ -8,6 +9,7 @@ import com.employeehub.repository.EmployeeRepository;
 import com.employeehub.service.EmployeeService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,9 +47,15 @@ class EmployeeControllerSaveTest {
 
     @BeforeEach
     void setUp() {
+        CurrentUserContext.set("test@example.com", "HR");
         mockMvc = MockMvcBuilders.standaloneSetup(employeeController).build();
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
+    }
+
+    @AfterEach
+    void tearDown() {
+        CurrentUserContext.clear();
     }
 
     // ── helper: build a saved Employee model entity ──────────────────────────────

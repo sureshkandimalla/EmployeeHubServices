@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.domain.EmployeeHoursReportRow;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.model.Bills;
@@ -46,6 +47,7 @@ public class HoursReportController {
     public List<EmployeeHoursReportRow> getReport(
             @RequestParam Long payPeriodId,
             @RequestParam(required = false) Long employeeId) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 
         PayPeriod payPeriod = payPeriodRepository.findById(payPeriodId)
                 .orElseThrow(() -> new ResourceNotFoundException("PayPeriod not found with payPeriodId: " + payPeriodId));

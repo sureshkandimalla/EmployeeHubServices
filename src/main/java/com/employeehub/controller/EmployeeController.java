@@ -145,6 +145,7 @@ public class EmployeeController {
 	// get employee by id rest api
 	@GetMapping("/employee/{id}")
 	public ResponseEntity<Employee> getEmployeeById(@PathVariable Long id) {
+		CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
 		Employee employee = employeeRepository.findById(id)
 				.orElseThrow(() -> new ResourceNotFoundException("Employee not exist with id :" + id));
 		return ResponseEntity.ok(employee);

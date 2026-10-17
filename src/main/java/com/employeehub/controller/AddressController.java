@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.model.Address;
 import com.employeehub.model.Employee;
@@ -54,6 +55,7 @@ public class AddressController {
 	@PutMapping("/employee/{employeeId}")
 	public ResponseEntity<Address> updateEmployeeAddress(@PathVariable long employeeId,
 			@RequestBody Address addressDetails) {
+		CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
 		Employee employee = employeeRepository.findById(employeeId)
 				.orElseThrow(() -> new ResourceNotFoundException("Employee not exist with id :" + employeeId));
 
@@ -121,6 +123,7 @@ public class AddressController {
 	// yet" is an expected, unexceptional state for older projects.
 	@GetMapping("/project/{projectId}")
 	public ResponseEntity<Address> getWorksiteAddressForProject(@PathVariable long projectId) {
+		CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
 		return addressRepository.findByProject_ProjectId(projectId)
 				.map(ResponseEntity::ok)
 				.orElse(ResponseEntity.noContent().build());
@@ -133,6 +136,7 @@ public class AddressController {
 	@GetMapping("/employee/{employeeId}/history")
 	public ResponseEntity<List<Address>> getAddressHistory(@PathVariable long employeeId,
 			@RequestParam(required = false) String type) {
+		CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
 		List<Address> all = addressRepository.findByEmployee_EmployeeIdOrderByStartDateDesc(employeeId);
 		if (type == null) {
 			return ResponseEntity.ok(all);

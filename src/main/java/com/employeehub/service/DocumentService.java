@@ -130,7 +130,7 @@ public class DocumentService {
         requireAccess(entityType, entityId);
         RootFolder root = resolveRootFolder(entityType, entityId);
         String s3Key = root.prefix() + "/" + root.id() + "/" + entityType.toLowerCase() + "/" + entityId + "/"
-                + UUID.randomUUID() + "-" + fileName;
+                + UUID.randomUUID() + "-" + sanitizeFileName(fileName);
         PutObjectRequest putRequest = PutObjectRequest.builder()
                 .bucket(bucketForCurrentTenant())
                 .key(s3Key)
@@ -142,6 +142,22 @@ public class DocumentService {
                 .build();
         String url = s3Presigner.presignPutObject(presignRequest).url().toString();
         return new PresignedUpload(url, s3Key);
+    }
+
+    // Strips path separators and any ".." segments so a crafted fileName
+    // (e.g. "../../other-tenant/secret.pdf") can't escape the key prefix
+    // built above.
+    private static String sanitizeFileName(String fileName) {
+        if (fileName == null) {
+            return "file";
+        }
+        String base = fileName.replace("\\", "/");
+        int lastSlash = base.lastIndexOf('/');
+        if (lastSlash >= 0) {
+            base = base.substring(lastSlash + 1);
+        }
+        base = base.replaceAll("[^a-zA-Z0-9._-]", "_");
+        return base.isEmpty() ? "file" : base;
     }
 
     public Document confirm(Document meta) {

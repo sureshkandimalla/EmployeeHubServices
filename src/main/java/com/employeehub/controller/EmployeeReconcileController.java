@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.domain.EmployeeReconcileRecord;
 import com.employeehub.domain.ReconcileExpense;
 import com.employeehub.domain.ReconcileRecord;
@@ -29,6 +30,7 @@ public class EmployeeReconcileController {
 
 	@GetMapping("/getReconcileRecords/{employeeId}")
 	public List<ReconcileRecord> getReconcileRecordsForEmployee(@PathVariable Long employeeId) {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		// validate employee exists, then delegate
 		employeeRepository.findById(employeeId)
 				.orElseThrow(() -> new ResourceNotFoundException("Employee not found with employeeId: " + employeeId));
@@ -37,6 +39,7 @@ public class EmployeeReconcileController {
 
 	@GetMapping("/getReconcileRecords")
 	public List<EmployeeReconcileRecord> getReconcileRecords() {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		return employeeRepository.findAllSorted().stream()
 				.map(employee -> {
 					List<ReconcileRecord> records = getReconcileRecords(employee.getEmployeeId());

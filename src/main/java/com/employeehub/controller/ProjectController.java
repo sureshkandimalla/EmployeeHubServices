@@ -53,9 +53,6 @@ public class ProjectController {
 			});
 
 
-		  flattenProjects.forEach(project -> { System.out.println(project); });
-
-		
 		return flattenProjects;
 	}
 
@@ -69,13 +66,6 @@ public class ProjectController {
 			project.getBillRates().forEach(billrate -> {
 				flattenProjects.addAll(projectService.createProjectForInvoice(project, billrate));
 			});
-
-		/*
-		 * flattenProjects.forEach(project -> { System.out.println(project); });
-		 */
-		flattenProjects.forEach(project -> {
-
-		});
 
 		return flattenProjects;
 	}
@@ -94,10 +84,6 @@ public class ProjectController {
 				flattenProjects.add(projectService.createProject(project, billrate, selectedDate));
 			});
 		});
-
-		/*
-		 * flattenProjects.forEach(project -> { System.out.println(project); });
-		 */
 
 		return flattenProjects;
 	}
@@ -125,7 +111,6 @@ public class ProjectController {
 				.collect(Collectors.toList());
 
 		// Fetch sum of wages from assignments table
-		System.out.println(projectIds);
 		var totalWageFromAssignments=0;
 		//var totalWageFromAssignments = assignmentRepository.getTotalWageByProjectIds(projectIds);
 		

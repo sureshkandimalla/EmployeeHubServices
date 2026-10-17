@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.model.*;
 import com.employeehub.repository.ProjectRepository;
@@ -27,12 +28,15 @@ public class WageController {
 
     @GetMapping("/getAllWages")
     public List<Wage> getAllEmployees() {
+        CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING");
         return wageRepository.findAll();
     }
     @PostMapping("/wage")
     public ResponseEntity<Map<String, Object>> createAssignment(@RequestBody com.employeehub.domain.Wage domainWage) {
-
-        System.out.println(domainWage);
+        // ProjectOnBoarding (HR-only route) and WorkOrderForm (Accounting's
+        // /projects) both create wage/bill-rate rows here.
+        CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING");
+        logger.debug("createAssignment wage: {}", domainWage);
         Project project = projectRepository.findById(domainWage.getProjectId())
                 .orElseThrow(() -> new ResourceNotFoundException("Project not exist with id :" + domainWage.getProjectId()));
         Wage modelWage=new Wage();
@@ -55,6 +59,8 @@ public class WageController {
 
     @PutMapping("/{id}")
     public ResponseEntity<Wage> updateWage(@PathVariable long id, @RequestBody Wage wageDetails) {
+        // ProjectOnBoarding (HR-only route) also updates wages here.
+        CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING");
         Wage wage = wageRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Wage not exist with id :" + id));
 
