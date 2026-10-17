@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.employeehub.repository.UserRoleRepository;
+
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -14,15 +16,20 @@ import java.io.IOException;
 // Runs on every /api/** request (see WebConfig for the exact registration/
 // exclusions). Verifies the app JWT issued at login (see AuthController),
 // sets the resolved tenant into TenantContext for TenantRoutingDataSource
-// to read, and rejects the request with 401 if the token is missing,
-// invalid, or expired. Cleared in a finally so ThreadLocal state never
-// leaks onto the thread's next, unrelated request (containers reuse
-// request-handling threads).
+// to read, resolves the caller's role into CurrentUserContext (so
+// controllers can gate sensitive actions server-side — see
+// CurrentUserContext#requireRole), and rejects the request with 401 if the
+// token is missing, invalid, or expired. Cleared in a finally so ThreadLocal
+// state never leaks onto the thread's next, unrelated request (containers
+// reuse request-handling threads).
 @Component
 public class AuthFilter extends OncePerRequestFilter {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private UserRoleRepository userRoleRepository;
 
     // Only the app's own /api/v1/** business endpoints require the token —
     // the login endpoint itself (which issues it), actuator health checks
@@ -56,9 +63,16 @@ public class AuthFilter extends OncePerRequestFilter {
 
         try {
             TenantContext.set((String) claims.get("tenant"));
+            // Role lookup needs TenantContext already set (user_role is a
+            // per-tenant table, same ordering AuthController's login uses).
+            String role = userRoleRepository.findByEmailIgnoreCase(claims.getSubject())
+                    .map(com.employeehub.model.UserRole::getRole)
+                    .orElse(null);
+            CurrentUserContext.set(claims.getSubject(), role);
             chain.doFilter(request, response);
         } finally {
             TenantContext.clear();
+            CurrentUserContext.clear();
         }
     }
 }

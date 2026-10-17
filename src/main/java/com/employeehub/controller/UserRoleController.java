@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.model.UserRole;
 import com.employeehub.repository.UserRoleRepository;
@@ -18,10 +19,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 // Manages the email->role mappings that back frontend page gating (see
-// BeanEMS's src/Utils/roleAccess.js and src/Admin/UserRoles.jsx). Behind the
-// standard AuthFilter (must be logged in) like every other endpoint here —
-// not further role-gated server-side, since enforcement for this feature is
-// frontend-only for now (see the role-based-access-control plan).
+// BeanEMS's src/Utils/roleAccess.js and src/Admin/UserRoles.jsx). Write
+// operations (grant/change/revoke a role) require the caller to already be
+// ADMIN — without that, any authenticated user could PUT their own email
+// with role=ADMIN and self-escalate.
 @RestController
 @RequestMapping("/api/v1/userRoles")
 public class UserRoleController {
@@ -37,6 +38,7 @@ public class UserRoleController {
   // Upsert by email: assigns a role to a new user or changes an existing one.
   @PutMapping
   public ResponseEntity<UserRole> upsertUserRole(@RequestBody UserRole userRole) {
+    CurrentUserContext.requireRole("ADMIN");
     UserRole existing = userRoleRepository.findByEmailIgnoreCase(userRole.getEmail()).orElse(null);
     if (existing != null) {
       existing.setRole(userRole.getRole());
@@ -47,6 +49,7 @@ public class UserRoleController {
 
   @DeleteMapping("/{email}")
   public ResponseEntity<Map<String, Boolean>> deleteUserRole(@PathVariable String email) {
+    CurrentUserContext.requireRole("ADMIN");
     UserRole userRole = userRoleRepository
       .findByEmailIgnoreCase(email)
       .orElseThrow(() -> new ResourceNotFoundException("no role assigned for email: " + email));

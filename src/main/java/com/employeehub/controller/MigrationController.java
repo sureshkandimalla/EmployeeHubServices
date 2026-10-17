@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,7 +15,10 @@ import java.util.Map;
  * One-off utility for reassigning an employee's primary key across every
  * table that references it, when an employee ended up with an ID outside
  * their company's reserved range (see CompanyIdRangeConfig) before that was
- * fixed. Not a permanent feature — remove after use.
+ * fixed. Not a permanent feature — remove after use. ADMIN-only: this
+ * rewrites every HR/payroll/visa/immigration record tied to an employee id
+ * in one shot, so it's restricted the same as any other irreversible
+ * bulk-data operation.
  */
 @RestController
 @RequestMapping("/api/v1/migration")
@@ -30,6 +34,7 @@ public class MigrationController {
     public ResponseEntity<Map<String, Object>> reassignEmployeeId(
             @RequestParam long oldId, @RequestParam long newId) {
 
+        CurrentUserContext.requireRole("ADMIN");
         Map<String, Object> updatedRowCounts = new LinkedHashMap<>();
 
         entityManager.createNativeQuery("SET FOREIGN_KEY_CHECKS=0").executeUpdate();
