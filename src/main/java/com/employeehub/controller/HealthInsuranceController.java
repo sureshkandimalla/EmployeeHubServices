@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.model.HealthInsurance;
 import com.employeehub.repository.HealthInsuranceRepository;
 import com.employeehub.service.HealthInsuranceService;
@@ -86,6 +87,7 @@ public class HealthInsuranceController {
 
     @DeleteMapping("/deleteAll")
     public ResponseEntity<?> deleteAll() {
+        CurrentUserContext.requireRole("ADMIN");
         healthInsuranceRepository.deleteAll();
         return ResponseEntity.ok("All health insurance records deleted.");
     }

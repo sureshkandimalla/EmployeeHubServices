@@ -15,8 +15,8 @@ before this tracker started, no authorization layer at all — no endpoint check
 | 3 | 🔲 Open | Critical | Backend | idor | Any authenticated user can read/delete any employee's S3 documents by guessing the numeric id |
 | 4 | 🔲 Open | High | Backend | mass-assignment | Document confirm endpoint saves the full client-supplied JSON, including a client-settable `id` |
 | 5 | 🔲 Open | High | Backend | authz | `getAllEmployees` returns every employee's SSN/DOB/salary to any authenticated user regardless of role |
-| 6 | 🔲 Open | Critical | Backend | authz | Any authenticated user can permanently wipe the entire payroll-summary or health-insurance table |
-| 7 | 🔲 Open | Critical | Backend | authz | `requireRole` exists on only 2 of 31 controllers — nearly every financial/immigration/customer write and delete endpoint has no role check at all |
+| 6 | ✅ Fixed | Critical | Backend | authz | Any authenticated user could permanently wipe the entire payroll-summary or health-insurance table |
+| 7 | 🔲 Open | Critical | Backend | authz | `requireRole` exists on only 4 of 31 controllers — nearly every financial/immigration/customer write and delete endpoint has no role check at all |
 | 8 | 🔲 Open | High | Backend | authz | Bulk master-data import (Employees/Customers/Projects/Assignments) has no role check |
 | 9 | 🔲 Open | High | Frontend | authz-design | Frontend explicitly documents (in its own code comments) that Archive/Delete role gating is UI-only and never reaches the backend |
 | 10 | 🔲 Open | Medium | Backend | authz | `ActionRequestController.resolve` lets any authenticated user forge an "admin approved" audit entry |
@@ -132,20 +132,24 @@ no `annualPay`) for roles that don't need financial/PII fields (e.g. IMMIGRATION
 
 ## #6 — Unrestricted bulk deleteAll on payroll-summary and health-insurance tables
 
-- **Status:** Open
+- **Status:** Fixed (2026-10-17)
 - **Severity:** Critical
 - **Type:** Backend
 - **Category:** authz
 - **File:** `src/main/java/com/employeehub/controller/PayrollSummaryController.java:86-90` (`DELETE /api/v1/payrollsummary/deleteAll`); `src/main/java/com/employeehub/controller/HealthInsuranceController.java:87-91` (`DELETE /api/v1/healthinsurance/deleteAll`)
 
-**Failure scenario:** Either endpoint calls `repository.deleteAll()` directly with zero checks —
+**Failure scenario:** Either endpoint called `repository.deleteAll()` directly with zero checks —
 not even a role gate, let alone a confirmation step. Any user with a valid JWT (any role, including
-one with no role row at all) can permanently destroy every payroll or health-insurance record
+one with no role row at all) could permanently destroy every payroll or health-insurance record
 company-wide in a single request. No audit trail, no undo.
 
-**Proposed fix (not yet implemented):** add `CurrentUserContext.requireRole("ADMIN")` as the first
-line of both; consider removing `deleteAll` entirely in favor of a scoped/soft delete if nothing
-actually depends on a full wipe.
+**Fix:** `CurrentUserContext.requireRole("ADMIN")` added as the first line of both `deleteAll`
+methods.
+
+**Verified:** non-admin JWT → `DELETE /api/v1/payrollsummary/deleteAll` → `403`; non-admin JWT →
+`DELETE /api/v1/healthinsurance/deleteAll` → `403`. The admin-allowed path wasn't separately
+re-tested here (it would require actually wiping local data) — #1/#2 already proved admin tokens
+pass through `CurrentUserContext.requireRole` correctly.
 
 ---
 
@@ -155,10 +159,10 @@ actually depends on a full wipe.
 - **Severity:** Critical
 - **Type:** Backend
 - **Category:** authz
-- **File:** systemic — `CurrentUserContext.requireRole` (added for #1/#2) is used in only
-  `UserRoleController.java` and `MigrationController.java`, out of 31 controllers in
-  `src/main/java/com/employeehub/controller`. Representative examples, all confirmed to have no
-  role check:
+- **File:** systemic — `CurrentUserContext.requireRole` is used in only 4 of 31 controllers in
+  `src/main/java/com/employeehub/controller` (`UserRoleController`, `MigrationController` from
+  #1/#2, plus `PayrollSummaryController`/`HealthInsuranceController`'s `deleteAll` from #6).
+  Representative examples among the remaining 27, all confirmed to have no role check:
   - `InvoiceController.java` — `PUT /invoices/{id}`, `DELETE /invoices/{id}`
   - `BillsController.java:81` — `DELETE /{id}`
   - `CustomerController.java` — `DELETE /customers/{id}`

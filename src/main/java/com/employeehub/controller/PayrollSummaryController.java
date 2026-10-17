@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.model.PayPeriod;
 import com.employeehub.model.PayrollSummary;
 import com.employeehub.repository.PayPeriodRepository;
@@ -85,6 +86,7 @@ public class PayrollSummaryController {
 
     @DeleteMapping("/deleteAll")
     public ResponseEntity<?> deleteAll() {
+        CurrentUserContext.requireRole("ADMIN");
         payrollSummaryRepository.deleteAll();
         return ResponseEntity.ok("All payroll summary records deleted.");
     }
