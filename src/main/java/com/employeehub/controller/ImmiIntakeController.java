@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.model.ImmiIntake;
 import com.employeehub.repository.ImmiIntakeRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,17 +28,20 @@ public class ImmiIntakeController {
 
     @PostMapping("/create")
     public ResponseEntity<ImmiIntake> create(@RequestBody ImmiIntake immiIntake) {
+        CurrentUserContext.requireRole("ADMIN", "IMMIGRATION");
         return ResponseEntity.ok(immiIntakeRepository.save(immiIntake));
     }
 
     @PutMapping("/{intakeId}")
     public ResponseEntity<ImmiIntake> update(@PathVariable Long intakeId, @RequestBody ImmiIntake immiIntake) {
+        CurrentUserContext.requireRole("ADMIN", "IMMIGRATION");
         immiIntake.setIntakeId(intakeId);
         return ResponseEntity.ok(immiIntakeRepository.save(immiIntake));
     }
 
     @DeleteMapping("/{intakeId}")
     public ResponseEntity<Void> delete(@PathVariable Long intakeId) {
+        CurrentUserContext.requireRole("ADMIN", "IMMIGRATION");
         immiIntakeRepository.deleteById(intakeId);
         return ResponseEntity.noContent().build();
     }

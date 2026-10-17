@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.domain.Dashboard;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.model.Assignment;
@@ -199,6 +200,7 @@ public class ProjectController {
 			"/saveOnBoardProject")
 	public ResponseEntity<Map<String, Object>> createProject(@RequestBody com.employeehub.domain.Project project) {
 
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		ResponseEntity<Map<String, Object>> savedProject = projectService.saveProject(project);
 		return savedProject;
 	}
@@ -223,6 +225,7 @@ public class ProjectController {
 
 	@PutMapping("/projects/{id}")
 	public ResponseEntity<Project> updateProject(@PathVariable Long id, @RequestBody Project projectDetails) {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		Project project = projectRepository.findById(id)
 				.orElseThrow(() -> new ResourceNotFoundException("Project not exist with id :" + id));
 
@@ -264,6 +267,7 @@ public class ProjectController {
 	// still pointing at the now-deleted project_id.
 	@DeleteMapping("/projects/{id}")
 	public ResponseEntity<Map<String, Integer>> deleteProject(@PathVariable Long id) {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		Project project = projectRepository.findById(id)
 				.orElseThrow(() -> new ResourceNotFoundException("Project not exist with id :" + id));
 

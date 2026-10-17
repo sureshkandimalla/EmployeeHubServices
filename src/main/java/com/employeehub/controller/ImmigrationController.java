@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.dto.EmployeeImmigrationProfile;
 import com.employeehub.model.Notes;
 import com.employeehub.service.EmployeeImmigrationService;
@@ -58,16 +59,22 @@ public class ImmigrationController {
 
     @PostMapping("/notes")
     public ResponseEntity<Notes> createNote(@RequestBody Notes note) {
+        // Notes attach to many entity types across every department (Wage,
+        // Visa, Employee, ...) — any assigned role may add one, not just
+        // Immigration despite this controller's name.
+        CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
         return ResponseEntity.ok(notesService.saveNote(note));
     }
 
     @PutMapping("/notes/{id}")
     public ResponseEntity<Notes> updateNote(@PathVariable Long id, @RequestBody Notes note) {
+        CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
         return ResponseEntity.ok(notesService.updateNote(id, note));
     }
 
     @DeleteMapping("/notes/{id}")
     public ResponseEntity<Map<String, Boolean>> deleteNote(@PathVariable Long id) {
+        CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
         notesService.deleteNote(id);
         Map<String, Boolean> response = new HashMap<>();
         response.put("deleted", Boolean.TRUE);

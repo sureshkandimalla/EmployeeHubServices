@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.model.Passport;
 import com.employeehub.service.PassportService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,18 +39,21 @@ public class PassportController {
 
     @PostMapping("/createPassport")
     public ResponseEntity<Passport> createPassport(@RequestBody Passport passport) {
+        CurrentUserContext.requireRole("ADMIN", "HR", "IMMIGRATION");
         logger.info("Creating passport: {}", passport);
         return ResponseEntity.ok(passportService.savePassport(passport));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Passport> updatePassport(@PathVariable Long id, @RequestBody Passport passportDetails) {
+        CurrentUserContext.requireRole("ADMIN", "HR", "IMMIGRATION");
         logger.info("Updating passport id={}", id);
         return ResponseEntity.ok(passportService.updatePassport(id, passportDetails));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Boolean>> deletePassport(@PathVariable Long id) {
+        CurrentUserContext.requireRole("ADMIN", "HR", "IMMIGRATION");
         passportService.deletePassport(id);
         Map<String, Boolean> response = new HashMap<>();
         response.put("deleted", Boolean.TRUE);

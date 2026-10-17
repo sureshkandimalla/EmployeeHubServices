@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.repository.VendorRepository;
 import com.employeehub.service.VendorService;
@@ -39,6 +40,7 @@ public class VendorController {
   @PostMapping("/saveOnBoardDetails")
   public ResponseEntity<Optional<Vendor>> createVendor(@RequestBody com.employeehub.domain.Vendor vendor) {
 
+	  CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 	  logger.info("vendor:: "+vendor.toString());
     Optional<Vendor> respVendor = vendorService.saveVendor(vendor);
 
@@ -63,6 +65,7 @@ public class VendorController {
     @PathVariable Long id,
     @RequestBody Vendor vendorDetails
   ) {
+    CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
     Vendor vendor = vendorRepository
       .findById(id)
       .orElseThrow(() ->
@@ -91,6 +94,7 @@ public class VendorController {
   public ResponseEntity<Map<String, Boolean>> deleteVendor(
     @PathVariable Long id
   ) {
+    CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
     Vendor vendor = vendorRepository
       .findById(id)
       .orElseThrow(() ->

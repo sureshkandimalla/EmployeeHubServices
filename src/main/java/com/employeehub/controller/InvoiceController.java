@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.domain.DashboardEmployeeDetails;
 import com.employeehub.model.Assignment;
 import com.employeehub.repository.AssignmentRepository;
@@ -50,6 +51,7 @@ public class InvoiceController {
 	public ResponseEntity<String> createInvoice(@RequestBody List<com.employeehub.domain.Invoice> invoices)
 			throws InvoiceException, BillsException {
 
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		List<com.employeehub.domain.Invoice> filteredInvoices = invoices.stream()
 				.filter(invoice -> isValid(invoice.getInvoiceNumber())) // only invoiceNumber as hours and total can be 0/null
 				.collect(Collectors.toList());
@@ -75,6 +77,7 @@ public class InvoiceController {
 	// invoices are skipped.
 	@PostMapping("/backfillBills")
 	public ResponseEntity<Map<String, Object>> backfillBills() throws BillsException {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		int invoicesBilled = invoiceService.backfillBillsForExistingInvoices();
 		Map<String, Object> result = new HashMap<>();
 		result.put("invoicesBilled", invoicesBilled);
@@ -88,6 +91,7 @@ public class InvoiceController {
 	// are left alone.
 	@PostMapping("/validateBillStatus")
 	public ResponseEntity<Map<String, Integer>> validateBillStatus() {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		return ResponseEntity.ok(invoiceService.validateBillStatusForAllInvoices());
 	}
 
@@ -95,6 +99,7 @@ public class InvoiceController {
 	// startDate/endDate don't match the invoice's. Safe to call repeatedly.
 	@PostMapping("/validateBillDates")
 	public ResponseEntity<Map<String, Integer>> validateBillDates() {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		return ResponseEntity.ok(invoiceService.validateBillDatesForAllInvoices());
 	}
 
@@ -105,6 +110,7 @@ public class InvoiceController {
 	@PostMapping("/deleteOrphanedBills")
 	public ResponseEntity<Map<String, Object>> deleteOrphanedBills(
 			@RequestParam(defaultValue = "true") boolean dryRun) {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		return ResponseEntity.ok(invoiceService.deleteOrphanedBills(dryRun));
 	}
 
@@ -186,6 +192,7 @@ public class InvoiceController {
 
 	@PutMapping("/invoices/{id}")
 	public ResponseEntity<Invoice> updateInvoice(@PathVariable Long id, @RequestBody Invoice invoiceDetails) {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		invoiceRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Invoice not exist with id: " + id));
 		// The path id is the only authoritative identity — never trust the
 		// request body's id (a client could send a different one, which
@@ -231,6 +238,7 @@ public class InvoiceController {
 	
 	@DeleteMapping("/invoices/{id}")
 	public ResponseEntity<Void> deleteInvoice(@PathVariable Long id) {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		Invoice invoice = invoiceRepository.findById(id)
 				.orElseThrow(() -> new ResourceNotFoundException("Invoice not exist with id: " + id));
 

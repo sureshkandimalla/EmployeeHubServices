@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.service.MasterDataLoadService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -46,6 +47,7 @@ public class MasterDataLoadController {
     @PostMapping("/import/{entityType}")
     public ResponseEntity<MasterDataLoadService.ImportResult> importData(
             @PathVariable String entityType, @RequestParam("file") MultipartFile file) throws Exception {
+        CurrentUserContext.requireRole("ADMIN");
         MasterDataLoadService.ImportResult result = switch (entityType) {
             case "employees" -> masterDataLoadService.importEmployees(file);
             case "customers" -> masterDataLoadService.importCustomers(file);

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.repository.CustomerRepository;
 import com.employeehub.service.CustomerService;
@@ -39,6 +40,7 @@ public class CustomerController {
   @PostMapping("/saveOnBoardDetails")
   public ResponseEntity<Optional<Customer>> createCustomer(@RequestBody com.employeehub.domain.Customer customer) {
 	  
+	  CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 	  logger.info("customer:: "+customer.toString());
     Optional<Customer> respCustomer = customerService.saveCustomer(customer);
     
@@ -65,6 +67,7 @@ public class CustomerController {
     @PathVariable Long id,
     @RequestBody Customer customerDetails
   ) {
+    CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
     Customer customer = customerRepository
       .findById(id)
       .orElseThrow(() ->
@@ -99,6 +102,7 @@ public class CustomerController {
   public ResponseEntity<Map<String, Boolean>> deletecustomer(
     @PathVariable Long id
   ) {
+    CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
     Customer customer = customerRepository
       .findById(id)
       .orElseThrow(() ->

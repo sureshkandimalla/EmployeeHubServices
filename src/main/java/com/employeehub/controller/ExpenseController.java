@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.model.Expense;
 import com.employeehub.repository.ExpenseRepository;
@@ -44,6 +45,7 @@ public class ExpenseController {
 
     @PostMapping("/addExpense")
     public ResponseEntity<Expense> createExpense(@RequestBody Expense expense) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         if (expense.getStatus() == null || expense.getStatus().isEmpty()) {
             expense.setStatus("Pending");
         }
@@ -53,6 +55,7 @@ public class ExpenseController {
 
     @PutMapping("/expenses/{id}")
     public ResponseEntity<Expense> updateExpense(@PathVariable Long id, @RequestBody Expense expenseDetails) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         expenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Expense not exist with id: " + id));
         expenseDetails.setExpenseId(id);
@@ -62,6 +65,7 @@ public class ExpenseController {
 
     @DeleteMapping("/expenses/{id}")
     public ResponseEntity<Void> deleteExpense(@PathVariable Long id) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         Expense expense = expenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Expense not exist with id: " + id));
         expenseRepository.delete(expense);

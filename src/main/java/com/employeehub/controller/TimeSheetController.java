@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.model.TimeSheet;
 import com.employeehub.repository.TimeSheetRepository;
 import com.employeehub.service.TimeSheetService;
@@ -52,6 +53,7 @@ public class TimeSheetController {
 
     @PostMapping("/saveBulk")
     public ResponseEntity<?> saveBulk(@RequestBody List<TimeSheet> entries) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         try {
             TimeSheetService.SaveResult result = timeSheetService.saveBulk(entries);
             Map<String, Object> response = new LinkedHashMap<>();
@@ -67,18 +69,21 @@ public class TimeSheetController {
 
     @PostMapping("/submit")
     public ResponseEntity<?> submit(@RequestParam Long assignmentId, @RequestParam String yearMonth) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         int updated = timeSheetService.submitMonth(assignmentId, YearMonth.parse(yearMonth));
         return ResponseEntity.ok("Submitted " + updated + " day(s) for approval.");
     }
 
     @PostMapping("/approve")
     public ResponseEntity<?> approve(@RequestParam Long assignmentId, @RequestParam String yearMonth) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         int updated = timeSheetService.approveMonth(assignmentId, YearMonth.parse(yearMonth));
         return ResponseEntity.ok("Approved " + updated + " day(s).");
     }
 
     @PostMapping("/reopen")
     public ResponseEntity<?> reopen(@RequestParam Long assignmentId, @RequestParam String yearMonth) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         int updated = timeSheetService.reopenMonth(assignmentId, YearMonth.parse(yearMonth));
         return ResponseEntity.ok("Reopened " + updated + " day(s) for editing.");
     }
@@ -88,30 +93,35 @@ public class TimeSheetController {
     // just a date range rather than a whole month.
     @PostMapping("/submitRange")
     public ResponseEntity<?> submitRange(@RequestParam Long assignmentId, @RequestParam String startDate, @RequestParam String endDate) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         int updated = timeSheetService.submitRange(assignmentId, LocalDate.parse(startDate), LocalDate.parse(endDate));
         return ResponseEntity.ok("Submitted " + updated + " day(s) for approval.");
     }
 
     @PostMapping("/approveRange")
     public ResponseEntity<?> approveRange(@RequestParam Long assignmentId, @RequestParam String startDate, @RequestParam String endDate) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         int updated = timeSheetService.approveRange(assignmentId, LocalDate.parse(startDate), LocalDate.parse(endDate));
         return ResponseEntity.ok("Approved " + updated + " day(s).");
     }
 
     @PostMapping("/rejectRange")
     public ResponseEntity<?> rejectRange(@RequestParam Long assignmentId, @RequestParam String startDate, @RequestParam String endDate) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         int updated = timeSheetService.rejectRange(assignmentId, LocalDate.parse(startDate), LocalDate.parse(endDate));
         return ResponseEntity.ok("Rejected " + updated + " day(s).");
     }
 
     @PostMapping("/reopenRange")
     public ResponseEntity<?> reopenRange(@RequestParam Long assignmentId, @RequestParam String startDate, @RequestParam String endDate) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         int updated = timeSheetService.reopenRange(assignmentId, LocalDate.parse(startDate), LocalDate.parse(endDate));
         return ResponseEntity.ok("Reopened " + updated + " day(s) for editing.");
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         timeSheetRepository.deleteById(id);
         return ResponseEntity.ok("Deleted timesheet entry " + id);
     }

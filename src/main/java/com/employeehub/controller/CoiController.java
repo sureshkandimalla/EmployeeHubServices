@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.model.Coi;
 import com.employeehub.repository.CoiRepository;
 import com.employeehub.service.CoiService;
@@ -21,6 +22,7 @@ public class CoiController {
 
     @PostMapping
     public ResponseEntity<Coi> createCoi(@RequestBody Coi coi) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         Coi saved = coiService.create(coi);
         return new ResponseEntity<>(saved, HttpStatus.CREATED);
     }
@@ -32,11 +34,13 @@ public class CoiController {
 
     @PutMapping("/{id}")
     public ResponseEntity<Coi> updateCoi(@PathVariable Long id, @RequestBody Coi coiDetails) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         return ResponseEntity.ok(coiService.update(id, coiDetails));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCoi(@PathVariable Long id) {
+        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
         coiService.delete(id);
         return ResponseEntity.noContent().build();
     }

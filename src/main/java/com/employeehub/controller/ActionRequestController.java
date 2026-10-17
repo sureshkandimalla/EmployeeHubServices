@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.model.ActionRequest;
 import com.employeehub.repository.ActionRequestRepository;
@@ -48,10 +49,13 @@ public class ActionRequestController {
     // approval — this just records the outcome.
     @PutMapping("/{requestId}/resolve")
     public ResponseEntity<ActionRequest> resolve(@PathVariable Long requestId, @RequestBody ResolveRequest body) {
+        CurrentUserContext.requireRole("ADMIN");
         ActionRequest existing = actionRequestRepository.findById(requestId)
                 .orElseThrow(() -> new ResourceNotFoundException("Request not found with id: " + requestId));
         existing.setStatus(body.status());
-        existing.setResolvedBy(body.resolvedBy());
+        // Never trust a client-supplied resolvedBy — it previously let any
+        // caller forge an "admin approved this" audit entry under any name.
+        existing.setResolvedBy(CurrentUserContext.email());
         existing.setResolvedDate(LocalDateTime.now());
         return ResponseEntity.ok(actionRequestRepository.save(existing));
     }

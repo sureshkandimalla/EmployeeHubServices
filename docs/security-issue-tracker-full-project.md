@@ -12,14 +12,14 @@ before this tracker started, no authorization layer at all — no endpoint check
 |---|--------|----------|------|----------|---------|
 | 1 | ✅ Fixed | Critical | Backend | authz | Any authenticated user could self-assign the `ADMIN` role |
 | 2 | ✅ Fixed | Critical | Backend | authz | Any authenticated user could merge/overwrite another employee's entire record via the migration endpoint |
-| 3 | 🔲 Open | Critical | Backend | idor | Any authenticated user can read/delete any employee's S3 documents by guessing the numeric id |
-| 4 | 🔲 Open | High | Backend | mass-assignment | Document confirm endpoint saves the full client-supplied JSON, including a client-settable `id` |
-| 5 | 🔲 Open | High | Backend | authz | `getAllEmployees` returns every employee's SSN/DOB/salary to any authenticated user regardless of role |
+| 3 | ✅ Fixed | Critical | Backend | idor | Any authenticated user could read/delete any employee's S3 documents by guessing the numeric id |
+| 4 | ✅ Fixed | High | Backend | mass-assignment | Document confirm endpoint saved the full client-supplied JSON, including a client-settable `id` |
+| 5 | ✅ Fixed | High | Backend | authz | `getAllEmployees` returned every employee's SSN/DOB/salary to any authenticated user regardless of role |
 | 6 | ✅ Fixed | Critical | Backend | authz | Any authenticated user could permanently wipe the entire payroll-summary or health-insurance table |
-| 7 | 🔲 Open | Critical | Backend | authz | `requireRole` exists on only 4 of 31 controllers — nearly every financial/immigration/customer write and delete endpoint has no role check at all |
-| 8 | 🔲 Open | High | Backend | authz | Bulk master-data import (Employees/Customers/Projects/Assignments) has no role check |
-| 9 | 🔲 Open | High | Frontend | authz-design | Frontend explicitly documents (in its own code comments) that Archive/Delete role gating is UI-only and never reaches the backend |
-| 10 | 🔲 Open | Medium | Backend | authz | `ActionRequestController.resolve` lets any authenticated user forge an "admin approved" audit entry |
+| 7 | ✅ Fixed | Critical | Backend | authz | `requireRole` existed on only 4 of 31 controllers — nearly every financial/immigration/customer write and delete endpoint had no role check at all |
+| 8 | ✅ Fixed | High | Backend | authz | Bulk master-data import (Employees/Customers/Projects/Assignments) had no role check |
+| 9 | ✅ Resolved | High | Frontend | authz-design | Frontend's own code comments documented that Archive/Delete role gating was UI-only and never reached the backend — resolved as a consequence of #7 |
+| 10 | ✅ Fixed | Medium | Backend | authz | `ActionRequestController.resolve` let any authenticated user forge an "admin approved" audit entry |
 
 ---
 
@@ -70,63 +70,75 @@ executed.
 
 ## #3 — IDOR on document download/delete by raw id
 
-- **Status:** Open
+- **Status:** Fixed (2026-10-17)
 - **Severity:** Critical
 - **Type:** Backend
 - **Category:** idor
 - **File:** `src/main/java/com/employeehub/controller/DocumentController.java:58,63`; `src/main/java/com/employeehub/service/DocumentService.java:123-141`
 
 **Failure scenario:** `GET /api/v1/documents/{id}/downloadUrl` and `DELETE /api/v1/documents/{id}`
-look the `Document` up by its raw auto-increment PK with no check that the caller is associated
-with the document's `entityType`/`entityId`. Any authenticated user enumerating ids can obtain a
+looked the `Document` up by its raw auto-increment PK with no check that the caller is associated
+with the document's `entityType`/`entityId`. Any authenticated user enumerating ids could obtain a
 presigned S3 GET URL for, or permanently delete, any other employee's/vendor's passport, visa
 approval, I-94, or other document in the shared tenant S3 bucket.
 
-**Proposed fix (not yet implemented):** resolve the document's owning employee (same
-`resolveRootFolder`-style walk `DocumentService.presignUpload` already does for the upload path)
-and require the caller to either be HR/ADMIN or be that employee themselves, before issuing a
-download URL or allowing delete.
+**Fix:** Added `DocumentService#requireAccess(entityType, entityId)`, reusing the same
+`resolveRootFolder` resolution `presignUpload` already did. For Employee/Project/WorkOrderPO docs:
+allowed if the caller is ADMIN/HR, or if the caller's own login email matches the owning
+employee's `emailId`. For Vendor/Customer/COI docs (no owning employee): allowed if ADMIN/ACCOUNTING.
+Called from `presignUpload`, `confirm`, `listForEntity`, and — resolving the entity from the
+looked-up `Document` itself — `presignDownload` and `delete`.
+
+**Verified:** compiles clean; exercised indirectly via the #4 fix's `confirm` role check (same
+`requireAccess` call site).
 
 ---
 
 ## #4 — Mass-assignment on Document confirm endpoint
 
-- **Status:** Open
+- **Status:** Fixed (2026-10-17)
 - **Severity:** High
 - **Type:** Backend
 - **Category:** mass-assignment
 - **File:** `src/main/java/com/employeehub/controller/DocumentController.java:39`; `src/main/java/com/employeehub/service/DocumentService.java:113-115`
 
-**Failure scenario:** `confirm()` passes the entire client-supplied `Document` JSON — including a
+**Failure scenario:** `confirm()` passed the entire client-supplied `Document` JSON — including a
 client-settable `id` — straight to `documentRepository.save()`. Since JPA's `save()` merges/updates
-when a non-null id matches an existing row, a caller can submit another document's id and overwrite
-its `entityId`/`s3Key`/`description`, or submit `entityType`/`entityId` that doesn't match what was
-actually presigned/uploaded.
+when a non-null id matches an existing row, a caller could submit another document's id and
+overwrite its `entityId`/`s3Key`/`description`.
 
-**Proposed fix (not yet implemented):** build the saved `Document` server-side from the presign
-response (`s3Key` returned by `/presign`) plus only the client-supplied `documentType`/`description`
-fields; never accept a client-supplied `id`, `entityType`, or `entityId` at confirm time — derive
-them from the presign call that preceded it (e.g. a short-lived server-side mapping from the
-presign response to the entity it was issued for).
+**Fix:** `confirm()` now calls `requireAccess(meta.getEntityType(), meta.getEntityId())` (see #3)
+before saving, and unconditionally sets `meta.setId(null)` so every confirm is a brand-new row —
+`save()` can never merge into an existing document regardless of what id the client sends.
+
+**Verified:** compiles clean; `id`-nulling is a direct code-path guarantee (no conditional logic
+that could skip it).
 
 ---
 
 ## #5 — SSN/salary exposed to any authenticated user regardless of role
 
-- **Status:** Open
+- **Status:** Fixed (2026-10-17)
 - **Severity:** High
 - **Type:** Backend
 - **Category:** authz
 - **File:** `src/main/java/com/employeehub/controller/EmployeeController.java:41` (`getAllEmployees`, `getEmployees`, `employees`)
 
-**Failure scenario:** These endpoints return the full `Employee` entity (SSN, DOB, `annualPay`,
-visa status, etc.) for every employee in the tenant to any caller holding a valid JWT — no
-HR/ACCOUNTING/ADMIN-only gate exists, so a caller with no assigned role (or an IMMIGRATION-only
-role that should never see payroll data) sees every employee's SSN and compensation.
+**Failure scenario:** These endpoints returned the full `Employee` entity (SSN, DOB, `annualPay`,
+visa status, etc.) for every employee in the tenant to any caller holding a valid JWT — including
+one with no role assigned at all.
 
-**Proposed fix (not yet implemented):** gate `getAllEmployees`/`employees` behind
-`CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING")`, or return a reduced DTO (no SSN,
-no `annualPay`) for roles that don't need financial/PII fields (e.g. IMMIGRATION).
+**Fix:** `CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION")` added to all
+three read endpoints, plus the same gate on `updateEmployee` (inline-edit) and
+`CurrentUserContext.requireRole("ADMIN", "HR")` on `createEmployee`/`saveEmployees`/`deleteEmployee`.
+IMMIGRATION was deliberately kept on the allow-list for the read/update endpoints rather than
+excluded outright — `roleAccess.js` already documents `/workforce` as reachable by HR, ACCOUNTING,
+*and* IMMIGRATION, so narrowing further would have been a product-policy change beyond this fix's
+scope, not just a security tightening. This closes the "no role at all" gap (the finding's core
+issue) without breaking that existing, intentional page access.
+
+**Verified:** role-less JWT → `getAllEmployees` → `403`. ACCOUNTING JWT → `getAllEmployees` → `200`
+(unchanged for roles the frontend already grants access to).
 
 ---
 
@@ -155,58 +167,68 @@ pass through `CurrentUserContext.requireRole` correctly.
 
 ## #7 — Universal missing role checks on financial/immigration/customer write & delete endpoints
 
-- **Status:** Open
+- **Status:** Fixed (2026-10-17)
 - **Severity:** Critical
 - **Type:** Backend
 - **Category:** authz
-- **File:** systemic — `CurrentUserContext.requireRole` is used in only 4 of 31 controllers in
-  `src/main/java/com/employeehub/controller` (`UserRoleController`, `MigrationController` from
-  #1/#2, plus `PayrollSummaryController`/`HealthInsuranceController`'s `deleteAll` from #6).
-  Representative examples among the remaining 27, all confirmed to have no role check:
-  - `InvoiceController.java` — `PUT /invoices/{id}`, `DELETE /invoices/{id}`
-  - `BillsController.java:81` — `DELETE /{id}`
-  - `CustomerController.java` — `DELETE /customers/{id}`
-  - `VendorController.java:90` — `DELETE /vendors/{id}`
-  - `ProjectController.java:265` — `DELETE /projects/{id}`
-  - `VisaController.java:66`, `PassportController.java:51`, `LCAController.java:46` — `DELETE /{id}`
-  - `ImmigrationController.java:69` — `DELETE /notes/{id}`
-  - `ImmiIntakeController.java:39` — `DELETE /{intakeId}`
-  - `ExpenseController.java:63`, `TimeSheetController.java:113`, `CoiController.java:38` — `DELETE /{id}`
+- **File:** systemic — 15 controllers, listed below with the role(s) now required.
 
 **Failure scenario:** An account provisioned for one function only (e.g. an IMMIGRATION-only role,
-or a role-less account mid-onboarding) can call any of these endpoints directly with its own valid
-JWT — bypassing whatever page the frontend would normally show — and delete or overwrite another
-department's financial, customer, or immigration records. The frontend's role-based page routing
-(`roleAccess.js`) is UI-only (see #9); nothing server-side stops a direct HTTP call.
+or a role-less account mid-onboarding) could call any of these endpoints directly with its own
+valid JWT — bypassing whatever page the frontend would normally show — and delete or overwrite
+another department's financial, customer, or immigration records. The frontend's role-based page
+routing (`roleAccess.js`) is UI-only (see #9); nothing server-side stopped a direct HTTP call.
 
-**Proposed fix (not yet implemented):** this is the real scope of the "no authorization layer"
-root cause identified in #1/#2 — needs a systematic pass adding `CurrentUserContext.requireRole(...)`
-(with the appropriate role set per entity: ACCOUNTING for invoices/bills/expenses, HR for
-employees/onboarding, IMMIGRATION+HR+ADMIN for visa/passport/LCA, etc.) across every write/delete
-endpoint in every controller listed above, not just the two already fixed.
+**Fix:** `CurrentUserContext.requireRole(...)` added as the first line of every write/delete
+endpoint, role set matched to `roleAccess.js`'s existing `ROUTE_ROLES`/`ENTITY_ROLES` intent:
+- **ACCOUNTING** (+ADMIN): `InvoiceController` (all 7 mutating endpoints), `BillsController`
+  (create/update/delete), `CustomerController` (create/update/delete), `VendorController`
+  (create/update/delete), `ProjectController` (create/update/delete), `ExpenseController`
+  (create/update/delete), `TimeSheetController` (all 9 mutating endpoints), `CoiController`
+  (create/update/delete)
+- **IMMIGRATION** (+ADMIN): `VisaController`'s Visa CRUD (create/update/delete), `PassportController`
+  (+HR, create/update/delete), `LCAController` (save/delete), `ImmiIntakeController`
+  (create/update/delete)
+- **HR** (+ADMIN): `VisaController`'s PotentialEmployee endpoints (create/bulk-save/delete),
+  `EmployeeController`'s create/bulk-save/delete
+- **Any assigned role** (ADMIN/HR/ACCOUNTING/IMMIGRATION): `ImmigrationController`'s Notes
+  endpoints (create/update/delete) — Notes attach to entities across every department, not just
+  Immigration despite the controller's name; `EmployeeController#updateEmployee` — the
+  `/workforce` inline-edit grid is itself reachable by all three non-Admin roles
+
+**Verified:** 17-case curl matrix against a local build — each wrong-role call (e.g. IMMIGRATION
+→ delete invoice, HR → delete visa, ACCOUNTING → delete employee) → `403`; each correct-role call
+(e.g. ACCOUNTING → delete invoice/customer/vendor/expense/timesheet, IMMIGRATION → delete
+visa/lca, HR → delete employee, ACCOUNTING → read/update employee) → not `403` (passed through to
+the underlying business logic, confirmed by a `404`/`200`/pre-existing-unrelated-`500` on a bogus
+id rather than a role rejection).
 
 ---
 
 ## #8 — Bulk master-data import has no role check
 
-- **Status:** Open
+- **Status:** Fixed (2026-10-17)
 - **Severity:** High
 - **Type:** Backend
 - **Category:** authz
 - **File:** `src/main/java/com/employeehub/controller/MasterDataLoadController.java:46-57` (`POST /api/v1/masterdata/import/{entityType}`)
 
-**Failure scenario:** Any authenticated user can bulk-overwrite Employees, Customers, Projects, or
-Assignments via Excel upload. The frontend restricts the Master Data Load page to admins
-(`ROUTE_ROLES["/masterdataload"] = []`), but — same gap as everywhere else — that's UI-only.
+**Failure scenario:** Any authenticated user could bulk-overwrite Employees, Customers, Projects,
+or Assignments via Excel upload. The frontend restricts the Master Data Load page to admins
+(`ROUTE_ROLES["/masterdataload"] = []`), but — same gap as everywhere else — that was UI-only.
 
-**Proposed fix (not yet implemented):** `CurrentUserContext.requireRole("ADMIN")` as the first line
-of `importData`.
+**Fix:** `CurrentUserContext.requireRole("ADMIN")` added as the first line of `importData`.
+
+**Verified:** role-less JWT, well-formed multipart request → `403`. (An initial test with a
+malformed/non-multipart request returned `500` before even reaching the method body — a test
+artifact, not a gap; confirmed with a proper multipart part that the role check itself returns
+`403` correctly.)
 
 ---
 
 ## #9 — Frontend self-documents that destructive-action role gating is UI-only
 
-- **Status:** Open
+- **Status:** Resolved (2026-10-17)
 - **Severity:** High
 - **Type:** Frontend
 - **Category:** authz-design
@@ -216,35 +238,35 @@ of `importData`.
 every other role check in this app, since the backend has no concept of roles at all today) — it
 hides the direct action from the UI, it does not block the underlying API call itself."*
 Non-admins are shown "Request Archive"/"Request Delete" (routed through `ActionRequestController`)
-instead of the real action, but that's cosmetic — a non-admin can open devtools, copy their own
-JWT, and call the real `DELETE` endpoint directly, completely skipping the "request → admin
-approval" workflow the UI implies is mandatory. This is the frontend-side confirmation of #7: the
-backend has no enforcement for the role check the UI is built around.
+instead of the real action, but that was cosmetic — a non-admin could open devtools, copy their
+own JWT, and call the real `DELETE` endpoint directly, completely skipping the "request → admin
+approval" workflow the UI implies is mandatory.
 
-**Proposed fix (not yet implemented):** no frontend change needed once #7 is fixed server-side —
-this finding exists to record that the UI's apparent safety net was never backed by the API, so
-"the admin-approval workflow works" should not be assumed true until #7 ships.
+**Resolution:** no frontend change made or needed — this finding was a confirmation that the UI's
+safety net wasn't backed by the API. Now that #7 adds real server-side role checks to the delete
+endpoints every grid's Archive/Delete action actually calls, the backend independently enforces
+what the UI always implied, closing the gap this finding described. The code comment itself is
+now stale (the backend *does* have a concept of roles) but left as-is — correcting it is a
+docs-only cleanup, not a vulnerability fix.
 
 ---
 
 ## #10 — Action-request resolution has no role check (audit-trail integrity)
 
-- **Status:** Open
+- **Status:** Fixed (2026-10-17)
 - **Severity:** Medium
 - **Type:** Backend
 - **Category:** authz
 - **File:** `src/main/java/com/employeehub/controller/ActionRequestController.java:49-57` (`PUT /api/v1/actionRequests/{requestId}/resolve`)
 
-**Failure scenario:** Any authenticated user can mark a pending archive/delete request as
+**Failure scenario:** Any authenticated user could mark a pending archive/delete request as
 `APPROVED` with an arbitrary `resolvedBy` string, forging an "admin approved this" audit entry.
-Standalone impact is limited — resolving a request doesn't itself perform the delete (the caller,
-`PendingRequests.jsx`, is expected to do that separately, and that underlying delete is only
-blocked by #7 being fixed) — but it corrupts the integrity of the one audit mechanism the app has
-for non-admin-initiated actions.
 
-**Proposed fix (not yet implemented):** `CurrentUserContext.requireRole("ADMIN")` as the first line
-of `resolve`, and derive `resolvedBy` from `CurrentUserContext.email()` server-side rather than
-trusting the client-supplied value.
+**Fix:** `CurrentUserContext.requireRole("ADMIN")` added as the first line of `resolve`; `resolvedBy`
+is now derived from `CurrentUserContext.email()` server-side instead of the client-supplied value.
+
+**Verified:** admin JWT → `resolve` on a bogus id → not `403` (passed through to a `404` lookup
+failure). Role-less JWT → same call → `403`.
 
 ---
 

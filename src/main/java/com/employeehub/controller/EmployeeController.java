@@ -4,6 +4,7 @@ import java.math.BigInteger;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.domain.BasicEmployee;
 import com.employeehub.repository.EmployeeRepository;
 import com.employeehub.service.EmployeeService;
@@ -41,6 +42,12 @@ public class EmployeeController {
 
 	@GetMapping("/getAllEmployees")
 	public List<Employee> getAllEmployees() {
+		// Full Employee (SSN, DOB, annualPay) — previously open to ANY
+		// authenticated user, even one with no role row at all. /workforce is
+		// intentionally reachable by HR, ACCOUNTING, and IMMIGRATION alike
+		// (see roleAccess.js ROUTE_ROLES), so this only closes the "no role
+		// at all" gap rather than narrowing who the frontend already lets in.
+		CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
 		return employeeRepository.findAllSorted().stream()
 				.sorted(Comparator.comparingLong(Employee::getEmployeeId))
 				.collect(Collectors.toList());
@@ -48,6 +55,7 @@ public class EmployeeController {
 
 	@GetMapping("/getEmployees")
 	public List<BasicEmployee> getEmployees() {
+		CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
 		return employeeRepository.findAllSorted().stream()
 				.sorted(Comparator.comparingLong(Employee::getEmployeeId))
 				.map(emp -> new BasicEmployee(BigInteger.valueOf(emp.getEmployeeId()), emp.getFirstName() + " " + emp.getLastName(), emp.getStatus()))
@@ -56,6 +64,7 @@ public class EmployeeController {
 
 	@GetMapping("/employees")
 	public List<Employee> getAllEmployeesNew() {
+		CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
 		return employeeRepository.findAllSorted().stream()
 				.sorted(Comparator.comparingLong(Employee::getEmployeeId))
 				.collect(Collectors.toList());
@@ -65,6 +74,7 @@ public class EmployeeController {
 	public ResponseEntity<Optional<Employee>> createEmployee(@RequestBody com.employeehub.domain.Employee employee)
 			throws EmployeeServiceException {
 
+		CurrentUserContext.requireRole("ADMIN", "HR");
 		logger.info("employee:: " + employee.toString());
 		Optional<Employee> respEmployee = employeeService.saveEmployeeDetails(employee);
 
@@ -79,6 +89,7 @@ public class EmployeeController {
 	public ResponseEntity<Optional<Employee>> saveEmployees(@RequestBody com.employeehub.domain.Employee[] employee)
 			throws EmployeeServiceException {
 
+		CurrentUserContext.requireRole("ADMIN", "HR");
 		System.out.println(employee);
 		Arrays.stream(employee).sequential().forEach(emp -> {
 			try {
@@ -143,6 +154,10 @@ public class EmployeeController {
 
 	@PutMapping("/{id}")
 	public ResponseEntity<Employee> updateEmployee(@PathVariable Long id, @RequestBody Employee employeeDetails) {
+		// Inline-edit on the /workforce grid is reachable by HR, ACCOUNTING,
+		// and IMMIGRATION alike (see roleAccess.js), so this stays open to
+		// any assigned role rather than narrowing to HR only.
+		CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING", "IMMIGRATION");
 		Employee employee = employeeRepository.findById(id)
 				.orElseThrow(() -> new ResourceNotFoundException("Employee not exist with id :" + id));
 
@@ -185,6 +200,7 @@ public class EmployeeController {
 	// delete employee rest api
 	@DeleteMapping("/{id}")
 	public ResponseEntity<Map<String, Boolean>> deleteEmployee(@PathVariable Long id) {
+		CurrentUserContext.requireRole("ADMIN", "HR");
 		Employee employee = employeeRepository.findById(id)
 				.orElseThrow(() -> new ResourceNotFoundException("Employee not exist with id :" + id));
 

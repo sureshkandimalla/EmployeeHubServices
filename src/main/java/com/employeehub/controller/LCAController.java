@@ -1,5 +1,6 @@
 package com.employeehub.controller;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.model.LCA;
 import com.employeehub.service.LCAService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +39,7 @@ public class LCAController {
 
     @PostMapping("/save")
     public ResponseEntity<LCA> saveLCA(@RequestBody LCA lca) {
+        CurrentUserContext.requireRole("ADMIN", "IMMIGRATION");
         boolean isUpdate = lca.getLcaId() != 0;
         logger.info("{} LCA id={}", isUpdate ? "Updating" : "Creating", lca.getLcaId());
         return ResponseEntity.ok(lcaService.saveLCA(lca));
@@ -45,6 +47,7 @@ public class LCAController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Boolean>> deleteLCA(@PathVariable Long id) {
+        CurrentUserContext.requireRole("ADMIN", "IMMIGRATION");
         lcaService.deleteLCA(id);
         Map<String, Boolean> response = new HashMap<>();
         response.put("deleted", Boolean.TRUE);

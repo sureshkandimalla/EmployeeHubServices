@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import com.employeehub.config.CurrentUserContext;
 import com.employeehub.domain.BasicEmployee;
 import com.employeehub.model.Invoice;
 import com.employeehub.repository.InvoiceRepository;
@@ -63,6 +64,7 @@ public class BillsController {
 
     @PostMapping
 	public ResponseEntity<Bills> createBill(@RequestBody Bills bill) throws BillsException {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		Bills savedBill = billsService.createBill(bill);
 		return new ResponseEntity<>(savedBill, HttpStatus.CREATED);
 	}
@@ -74,12 +76,14 @@ public class BillsController {
 
 	@PutMapping("/{id}")
 	public ResponseEntity<Bills> updateBill(@PathVariable Long id, @RequestBody Bills billDetails) throws BillsException {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		Bills updatedBill = billsService.updateBill(id, billDetails);
 		return ResponseEntity.ok(updatedBill);
 	}
 
 	@DeleteMapping("/{id}")
 	public ResponseEntity<Void> deleteBill(@PathVariable Long id) {
+		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
 		billsService.deleteBill(id);
 		return ResponseEntity.noContent().build();
 	}
