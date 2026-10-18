@@ -163,7 +163,7 @@ public class InvoiceController {
 		logger.info("formattedDate:::::" + formattedDate);
 		List<Invoice> invoiceMonthList;
 		
-		if(status.equalsIgnoreCase("viewAll")) {
+		if(status == null || status.equalsIgnoreCase("viewAll")) {
 		 invoiceMonthList = invoiceRepository.findAllInvoicesForTheMonth(formattedDate);
 		}else {
 			invoiceMonthList = invoiceRepository.findAllInvoicesForTheMonthAndStatus(formattedDate,status);

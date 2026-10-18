@@ -75,7 +75,8 @@ public class InvoiceService {
 
 			Invoice existing = existingInvoice.get();
 			boolean numberChanged = !java.util.Objects.equals(existing.getInvoiceNumber(), dbInvoice.getInvoiceNumber());
-			if (!(existing.getHours()==dbInvoice.getHours()) || !(existing.getTotal()==dbInvoice.getTotal()) || numberChanged) {
+			boolean endDateChanged = !java.util.Objects.equals(existing.getEndDate(), dbInvoice.getEndDate());
+			if (!(existing.getHours()==dbInvoice.getHours()) || !(existing.getTotal()==dbInvoice.getTotal()) || numberChanged || endDateChanged) {
 				existing.setHours(dbInvoice.getHours());
 				existing.setTotal(dbInvoice.getTotal());
 				existing.setInvoiceNumber(dbInvoice.getInvoiceNumber());

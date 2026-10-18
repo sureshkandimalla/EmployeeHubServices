@@ -102,6 +102,13 @@ public class EmployeeService {
 			logger.info("saveEmployeeDetails: no reserved range applied, assigned fallback employeeId={}", fallbackId);
 		}
 		// TODO mapping based on UI to DB
+		if (employee.gender() == null || employee.gender().isEmpty()) {
+			throw new com.employeehub.exception.BadRequestException("gender is required");
+		}
+		if (employee.country() == null || employee.country().isEmpty()) {
+			throw new com.employeehub.exception.BadRequestException("country is required");
+		}
+
 		emp.setFirstName(employee.firstName());
 		emp.setLastName(employee.lastName());
 		emp.setDesignation(employee.designation());
@@ -111,7 +118,7 @@ public class EmployeeService {
 		emp.setEmailId(employee.emailId());
 		emp.setPhone(employee.phoneNumber());
 		emp.setWorkCountry(employee.country().toString());
-		emp.setWorkCity(emp.getWorkCity());
+		emp.setWorkCity(employee.city());
 
 		emp.setEmploymentType(employee.employmentType());
 		// Was never mapped here (only on the later PUT /employees/{id} update
