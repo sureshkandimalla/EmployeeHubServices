@@ -56,8 +56,12 @@ public class BillsController {
                 .filter(id -> id != null)
                 .distinct()
                 .collect(Collectors.toList());
-        Map<Long, Long> invoiceNumbersById = invoiceRepository.findAllById(invoiceIds).stream()
-                .collect(Collectors.toMap(Invoice::getId, Invoice::getInvoiceNumber));
+        // Collectors.toMap throws NPE on any null value (Map.merge rejects
+        // nulls) — some invoices have no invoiceNumber assigned yet, so
+        // build the map with put() instead, which tolerates it.
+        Map<Long, Long> invoiceNumbersById = new java.util.HashMap<>();
+        invoiceRepository.findAllById(invoiceIds)
+                .forEach(invoice -> invoiceNumbersById.put(invoice.getId(), invoice.getInvoiceNumber()));
         bills.forEach(bill -> bill.setInvoiceNumber(invoiceNumbersById.get(bill.getInvoiceId())));
     }
 
