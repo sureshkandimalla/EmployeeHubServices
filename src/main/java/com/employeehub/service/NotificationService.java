@@ -18,13 +18,15 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 // Domain-specific notification triggers, each built on the generic
 // EmailService primitive — this is the one place that knows *what* to say
-// and *who* HR/onboarding actually are (everyone with role=HR in
-// user_role); EmailService only knows how to send a message it's handed.
-// Adding a third trigger later (visa status change, overdue invoice, ...)
-// means adding one more method here, not touching EmailService.
+// and *who* HR/onboarding/immigration actually are (everyone with role=HR
+// or role=IMMIGRATION in user_role); EmailService only knows how to send a
+// message it's handed. Adding a third trigger later (visa status change,
+// overdue invoice, ...) means adding one more method here, not touching
+// EmailService.
 @Service
 public class NotificationService {
 
@@ -45,18 +47,22 @@ public class NotificationService {
 
     // No dedicated "onboarding" role exists today (see UserRole: ADMIN |
     // HR | ACCOUNTING | IMMIGRATION) — onboarding notifications go to the
-    // same HR list. If a distinct onboarding distribution is ever needed,
-    // this is the one place to change.
-    private List<String> hrAndOnboardingRecipients() {
-        return userRoleRepository.findByRoleIgnoreCase("HR").stream()
+    // same HR list, plus Immigration (new hires and expiring documents are
+    // both squarely their concern too — visa status, EAD/passport renewals,
+    // etc.). If a distinct onboarding distribution is ever needed, this is
+    // the one place to change.
+    private List<String> hrAndImmigrationRecipients() {
+        return Stream.of("HR", "IMMIGRATION")
+                .flatMap(role -> userRoleRepository.findByRoleIgnoreCase(role).stream())
                 .map(r -> r.getEmail())
+                .distinct()
                 .collect(Collectors.toList());
     }
 
     public void notifyNewEmployeeCreated(Employee employee) {
-        List<String> recipients = hrAndOnboardingRecipients();
+        List<String> recipients = hrAndImmigrationRecipients();
         if (recipients.isEmpty()) {
-            logger.warn("New-employee email for {} {} skipped: no one has the HR role",
+            logger.warn("New-employee email for {} {} skipped: no one has the HR or IMMIGRATION role",
                     employee.getFirstName(), employee.getLastName());
             return;
         }
@@ -92,10 +98,10 @@ public class NotificationService {
             return;
         }
 
-        List<String> recipients = hrAndOnboardingRecipients();
+        List<String> recipients = hrAndImmigrationRecipients();
         if (recipients.isEmpty()) {
-            logger.warn("{} expiring document(s) found but no one has the HR role — not marking as alerted, "
-                    + "will retry next run", expiring.size());
+            logger.warn("{} expiring document(s) found but no one has the HR or IMMIGRATION role — not marking "
+                    + "as alerted, will retry next run", expiring.size());
             return;
         }
 
