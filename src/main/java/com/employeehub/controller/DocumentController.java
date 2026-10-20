@@ -26,13 +26,19 @@ public class DocumentController {
     @Autowired
     private DocumentRepository documentRepository;
 
-    public record PresignRequest(String entityType, Long entityId, String fileName, String contentType) {
+    // documentType/subType/validFrom/validUntil are optional and only
+    // informational here (not yet stored — confirm() is what actually
+    // persists them) — they're passed at this step purely so the S3 key
+    // can be built as a readable name instead of a random one.
+    public record PresignRequest(String entityType, Long entityId, String fileName, String contentType,
+                                  String documentType, String subType, String validFrom, String validUntil) {
     }
 
     @PostMapping("/presign")
     public ResponseEntity<PresignedUpload> presign(@RequestBody PresignRequest request) {
         PresignedUpload upload = documentService.presignUpload(
-                request.entityType(), request.entityId(), request.fileName(), request.contentType());
+                request.entityType(), request.entityId(), request.fileName(), request.contentType(),
+                request.documentType(), request.subType(), request.validFrom(), request.validUntil());
         return ResponseEntity.ok(upload);
     }
 

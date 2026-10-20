@@ -6,14 +6,18 @@ import com.employeehub.domain.DownloadLink;
 import com.employeehub.domain.PresignedUpload;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.model.Coi;
+import com.employeehub.model.Customer;
 import com.employeehub.model.Document;
 import com.employeehub.model.Employee;
 import com.employeehub.model.Project;
+import com.employeehub.model.Vendor;
 import com.employeehub.model.Wage;
 import com.employeehub.repository.CoiRepository;
+import com.employeehub.repository.CustomerRepository;
 import com.employeehub.repository.DocumentRepository;
 import com.employeehub.repository.EmployeeRepository;
 import com.employeehub.repository.ProjectRepository;
+import com.employeehub.repository.VendorRepository;
 import com.employeehub.repository.WageRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -29,11 +33,13 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class DocumentService {
+
+    private static final DateTimeFormatter KEY_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 
     @Autowired
     private DocumentRepository documentRepository;
@@ -45,6 +51,10 @@ public class DocumentService {
     private CoiRepository coiRepository;
     @Autowired
     private EmployeeRepository employeeRepository;
+    @Autowired
+    private VendorRepository vendorRepository;
+    @Autowired
+    private CustomerRepository customerRepository;
     @Autowired
     private S3Client s3Client;
     @Autowired
@@ -126,11 +136,32 @@ public class DocumentService {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not authorized for this document");
     }
 
-    public PresignedUpload presignUpload(String entityType, Long entityId, String fileName, String contentType) {
+    public PresignedUpload presignUpload(String entityType, Long entityId, String fileName, String contentType,
+                                          String documentType, String subType, String validFrom, String validUntil) {
         requireAccess(entityType, entityId);
         RootFolder root = resolveRootFolder(entityType, entityId);
-        String s3Key = root.prefix() + "/" + root.id() + "/" + entityType.toLowerCase() + "/" + entityId + "/"
-                + UUID.randomUUID() + "-" + sanitizeFileName(fileName);
+
+        // Readable, not random: <ownerId>_<ownerName>_<documentType>_<subType>_<validFrom>_<validUntil>_<timestamp>.<ext>
+        // The millisecond timestamp is the uniqueifier (replacing a UUID) —
+        // it stays readable/sortable in the S3 console while still making a
+        // collision between two uploads of the same type+subType for the
+        // same owner (e.g. an H1B approval renewed years apart) practically
+        // impossible; without *some* uniqueifier, a second such upload would
+        // silently overwrite the first object in S3 even though both
+        // Document rows remain in the database. documentNumber (passport #,
+        // receipt #, ...) is deliberately left out of the key — S3 keys show
+        // up in logs/URLs, and that's not a place to put document numbers.
+        StringBuilder name = new StringBuilder(String.valueOf(root.id()));
+        appendKeySegment(name, ownerDisplayName(root));
+        appendKeySegment(name, documentType);
+        appendKeySegment(name, subType);
+        appendKeySegment(name, validFrom);
+        appendKeySegment(name, validUntil);
+        appendKeySegment(name, KEY_TIMESTAMP.format(LocalDateTime.now()));
+
+        String ext = fileExtension(fileName);
+        String s3Key = root.prefix() + "/" + name + (ext.isEmpty() ? "" : "." + ext);
+
         PutObjectRequest putRequest = PutObjectRequest.builder()
                 .bucket(bucketForCurrentTenant())
                 .key(s3Key)
@@ -144,20 +175,46 @@ public class DocumentService {
         return new PresignedUpload(url, s3Key);
     }
 
-    // Strips path separators and any ".." segments so a crafted fileName
-    // (e.g. "../../other-tenant/secret.pdf") can't escape the key prefix
-    // built above.
-    private static String sanitizeFileName(String fileName) {
-        if (fileName == null) {
-            return "file";
+    private String ownerDisplayName(RootFolder root) {
+        switch (root.prefix()) {
+            case "employees": {
+                Employee emp = employeeRepository.findById(root.id())
+                        .orElseThrow(() -> new ResourceNotFoundException("Employee not exist with id :" + root.id()));
+                return emp.getFirstName() + " " + emp.getLastName();
+            }
+            case "vendors": {
+                Vendor vendor = vendorRepository.findById(root.id())
+                        .orElseThrow(() -> new ResourceNotFoundException("Vendor not exist with id :" + root.id()));
+                return vendor.getVendorCompanyName();
+            }
+            case "customers": {
+                Customer customer = customerRepository.findById(root.id())
+                        .orElseThrow(() -> new ResourceNotFoundException("Customer not exist with id :" + root.id()));
+                return customer.getCustomerCompanyName();
+            }
+            default:
+                return "";
         }
-        String base = fileName.replace("\\", "/");
-        int lastSlash = base.lastIndexOf('/');
-        if (lastSlash >= 0) {
-            base = base.substring(lastSlash + 1);
-        }
-        base = base.replaceAll("[^a-zA-Z0-9._-]", "_");
-        return base.isEmpty() ? "file" : base;
+    }
+
+    // Appends "_<cleaned>" — alphanumeric only, so no raw value (free-typed
+    // documentType/subType included) can inject a "/" and escape the key's
+    // folder prefix. Blank/null segments are skipped entirely rather than
+    // leaving a bare "_" in the name.
+    private static void appendKeySegment(StringBuilder sb, String raw) {
+        if (raw == null) return;
+        // Hyphens pass through (so a date reads "2026-01-01", not
+        // "2026_01_01") — everything else not alphanumeric/hyphen,
+        // including "/", becomes "_".
+        String cleaned = raw.trim().replaceAll("[^a-zA-Z0-9-]+", "_").replaceAll("^[_-]+|[_-]+$", "");
+        if (!cleaned.isEmpty()) sb.append("_").append(cleaned);
+    }
+
+    private static String fileExtension(String fileName) {
+        if (fileName == null) return "";
+        int dot = fileName.lastIndexOf('.');
+        if (dot < 0 || dot == fileName.length() - 1) return "";
+        return fileName.substring(dot + 1).replaceAll("[^a-zA-Z0-9]", "");
     }
 
     public Document confirm(Document meta) {

@@ -40,6 +40,9 @@ public class EmployeeService {
 	@Autowired
     private EmployeeRepository employeeRepository;
 
+	@Autowired
+	private NotificationService notificationService;
+
 	public Optional<Employee> saveEmployee(com.employeehub.domain.Employee employee) throws EmployeeServiceException {
 		Employee entity = employeeRepository.findById(employee.employeeId())
 				.orElseThrow(() -> new IllegalArgumentException("Employee not found"));
@@ -156,6 +159,16 @@ public class EmployeeService {
 		
         try {
             Employee savedEmployee = employeeRepository.save(emp);
+            try {
+                notificationService.notifyNewEmployeeCreated(savedEmployee);
+            } catch (Exception e) {
+                // An email failure must never fail the employee creation
+                // that already succeeded — EmailService itself also
+                // swallows send errors, but this guards against anything
+                // thrown earlier (e.g. the HR-recipient lookup).
+                logger.error("New-employee notification failed for employeeId={}: {}",
+                        savedEmployee.getEmployeeId(), e.getMessage(), e);
+            }
             return Optional.of(savedEmployee);
         } catch (Exception e) {
             throw new EmployeeServiceException("Employee data not saved", e);

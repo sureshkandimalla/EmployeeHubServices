@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import javax.persistence.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 // Generic file attachment, reused across entity types (Insurance, Customer
@@ -41,6 +42,28 @@ public class Document {
   // dropdown's option list.
   private String documentType;
 
+  // Free-form refinement within a documentType (e.g. "Initial" vs
+  // "Extension" for an H1B approval) — multiple documents can share the
+  // same (documentType, subType) pair, which is what makes a grid row
+  // expandable (see EmployeeDocumentsPanel.jsx on the frontend).
+  private String subType;
+
+  private LocalDate validFrom;
+  private LocalDate validUntil;
+
+  // The document's own identifier as printed on it (passport number, I-94
+  // number, receipt number, ...) — distinct from `id`, which is this row's
+  // own database key.
+  private String documentNumber;
+
   @Column(columnDefinition = "TEXT")
   private String description;
+
+  // Set the first time the expiration-check job emails about this document
+  // (see NotificationService#checkExpiringDocuments) — null means "not
+  // alerted yet". Stops the same expiring document from re-emailing every
+  // day it stays inside the lead-time window; re-uploading a renewed
+  // document creates a fresh row (new id, this field unset), so the old
+  // one's alert history doesn't carry over.
+  private LocalDate expirationAlertSentAt;
 }
