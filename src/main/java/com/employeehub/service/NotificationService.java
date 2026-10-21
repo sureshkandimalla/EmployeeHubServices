@@ -1,5 +1,6 @@
 package com.employeehub.service;
 
+import com.employeehub.i9.I9Rules;
 import com.employeehub.model.Document;
 import com.employeehub.model.Employee;
 import com.employeehub.repository.DocumentRepository;
@@ -41,6 +42,8 @@ public class NotificationService {
     private DocumentRepository documentRepository;
     @Autowired
     private EmployeeRepository employeeRepository;
+    @Autowired
+    private I9RecordService i9RecordService;
 
     @Value("${app.mail.expiration-lead-days:30}")
     private int expirationLeadDays;
@@ -139,6 +142,66 @@ public class NotificationService {
             doc.setExpirationAlertSentAt(today);
         }
         documentRepository.saveAll(expiring);
+    }
+
+    // Runs daily (offset from checkExpiringDocuments by 30 minutes so the
+    // two jobs don't start in the same minute). Unlike checkExpiringDocuments
+    // this has no per-item dedupe — it's a recurring digest of whatever is
+    // currently High priority (section 8's own open-tasks list, computed
+    // fresh each run via I9Rules), not a one-time alert per newly-expiring
+    // item. That's a deliberate simplification: I9Rules.openTasks has no
+    // persisted "already alerted" state, and adding one would mean a new
+    // table just to suppress re-sending the same still-open task — a HR
+    // inbox getting the same open item again tomorrow is an acceptable
+    // trade-off against that added complexity.
+    @Scheduled(cron = "0 30 7 * * *")
+    public void checkI9Compliance() {
+        List<I9Rules.Task> highPriority = i9RecordService.openTasksForAllEmployees().stream()
+                .filter(t -> t.priority() == I9Rules.Priority.HIGH)
+                .collect(Collectors.toList());
+
+        if (highPriority.isEmpty()) {
+            logger.debug("I-9 compliance check: no High-priority open tasks");
+            return;
+        }
+
+        List<String> recipients = hrAndImmigrationRecipients();
+        if (recipients.isEmpty()) {
+            logger.warn("{} High-priority I-9 task(s) found but no one has the HR or IMMIGRATION role",
+                    highPriority.size());
+            return;
+        }
+
+        Map<Long, Employee> employeesById = employeeRepository.findAllById(
+                highPriority.stream().map(I9Rules.Task::employeeId).collect(Collectors.toList())
+        ).stream().collect(Collectors.toMap(Employee::getEmployeeId, e -> e));
+
+        StringBuilder rows = new StringBuilder();
+        for (I9Rules.Task task : highPriority) {
+            Employee emp = employeesById.get(task.employeeId());
+            String employeeName = emp != null ? emp.getFirstName() + " " + emp.getLastName()
+                    : "Employee #" + task.employeeId();
+            rows.append("<tr>")
+                    .append("<td style=\"padding:4px 12px 4px 0\">").append(HtmlUtils.htmlEscape(employeeName)).append("</td>")
+                    .append("<td style=\"padding:4px 12px 4px 0\">").append(HtmlUtils.htmlEscape(task.label())).append("</td>")
+                    .append("<td style=\"padding:4px 12px 4px 0\">")
+                    .append(task.due() != null ? task.due().format(DATE_FMT) : "")
+                    .append("</td>")
+                    .append("<td style=\"padding:4px 12px 4px 0\">").append(HtmlUtils.htmlEscape(task.whereToFix())).append("</td>")
+                    .append("</tr>");
+        }
+
+        String subject = highPriority.size() == 1
+                ? "1 I-9 compliance task needs attention"
+                : highPriority.size() + " I-9 compliance tasks need attention";
+        String body = "<p>The following High-priority I-9 compliance tasks are currently open:</p>"
+                + "<table cellpadding=\"4\" style=\"border-collapse:collapse\">"
+                + "<tr><th align=\"left\">Employee</th><th align=\"left\">Task</th><th align=\"left\">Due</th>"
+                + "<th align=\"left\">Where to fix</th></tr>"
+                + rows
+                + "</table>";
+
+        emailService.send(recipients, subject, body);
     }
 
     private String row(String label, String value) {

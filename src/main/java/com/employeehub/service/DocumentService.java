@@ -12,10 +12,12 @@ import com.employeehub.model.Employee;
 import com.employeehub.model.Project;
 import com.employeehub.model.Vendor;
 import com.employeehub.model.Wage;
+import com.employeehub.model.i9.I9Record;
 import com.employeehub.repository.CoiRepository;
 import com.employeehub.repository.CustomerRepository;
 import com.employeehub.repository.DocumentRepository;
 import com.employeehub.repository.EmployeeRepository;
+import com.employeehub.repository.I9RecordRepository;
 import com.employeehub.repository.ProjectRepository;
 import com.employeehub.repository.VendorRepository;
 import com.employeehub.repository.WageRepository;
@@ -56,6 +58,8 @@ public class DocumentService {
     @Autowired
     private CustomerRepository customerRepository;
     @Autowired
+    private I9RecordRepository i9RecordRepository;
+    @Autowired
     private S3Client s3Client;
     @Autowired
     private S3Presigner s3Presigner;
@@ -95,6 +99,11 @@ public class DocumentService {
                                 "Project not exist with id :" + wage.getProjectId()));
                 return new RootFolder("employees", project.getEmployee().getEmployeeId());
             }
+            case "I9Record": {
+                I9Record i9Record = i9RecordRepository.findById(entityId)
+                        .orElseThrow(() -> new ResourceNotFoundException("I9Record not exist with id :" + entityId));
+                return new RootFolder("employees", i9Record.getEmployeeId());
+            }
             case "Vendor":
                 return new RootFolder("vendors", entityId);
             case "Customer":
@@ -119,11 +128,22 @@ public class DocumentService {
     // the frontend. Without this, any authenticated user — any role, any
     // employee — could read or delete any other employee's/vendor's
     // documents by entityId or by the raw Document id alone.
+    //
+    // I9Record attachments are deliberately NOT covered by the generic
+    // "employees" branch below — I-9 is the most sensitive document
+    // category (SSN/A-numbers, work authorization) and is HR-controlled,
+    // not self-service, so the owning employee does not get access to
+    // their own I-9 attachments the way they do their other documents.
     private void requireAccess(String entityType, Long entityId) {
-        RootFolder root = resolveRootFolder(entityType, entityId);
         String role = CurrentUserContext.role();
         if ("ADMIN".equals(role)) return;
 
+        if ("I9Record".equals(entityType)) {
+            if ("HR".equals(role) || "IMMIGRATION".equals(role)) return;
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not authorized for this document");
+        }
+
+        RootFolder root = resolveRootFolder(entityType, entityId);
         if ("employees".equals(root.prefix())) {
             if ("HR".equals(role)) return;
             Employee owner = employeeRepository.findById(root.id())
