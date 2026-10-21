@@ -4,6 +4,8 @@ import com.employeehub.config.CurrentUserContext;
 import com.employeehub.exception.I9ValidationException;
 import com.employeehub.exception.ResourceNotFoundException;
 import com.employeehub.i9.I9Config;
+import com.employeehub.i9.I9PdfExtraction;
+import com.employeehub.i9.I9PdfExtractor;
 import com.employeehub.i9.I9Rules;
 import com.employeehub.model.Document;
 import com.employeehub.model.Employee;
@@ -16,6 +18,8 @@ import com.employeehub.repository.PassportRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -161,5 +165,34 @@ public class I9RecordService {
             tasks.addAll(I9Rules.openTasks(ctx, records, today));
         }
         return tasks;
+    }
+
+    public record PdfExtractionResult(I9PdfExtraction extraction, boolean nameMismatch, String employeeNameOnFile) {
+    }
+
+    // Reads the official Form I-9 PDF's own AcroForm fields (see
+    // I9PdfExtractor) and cross-checks the name on the PDF against the
+    // employee this record is being added for — a wrong-employee upload
+    // (the most dangerous mistake here, given the SSN/A-number involved)
+    // surfaces as a warning instead of silently pre-filling the wrong
+    // person's data into this employee's record.
+    public PdfExtractionResult extractFromPdf(Long employeeId, InputStream pdfStream) throws IOException {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not exist with id :" + employeeId));
+        I9PdfExtraction extraction = I9PdfExtractor.extract(pdfStream);
+
+        String employeeName = (employee.getFirstName() + " " + employee.getLastName()).trim();
+        boolean nameMismatch = false;
+        if (extraction.extractedFirstName() != null || extraction.extractedLastName() != null) {
+            String extractedName = ((extraction.extractedFirstName() != null ? extraction.extractedFirstName() : "")
+                    + " " + (extraction.extractedLastName() != null ? extraction.extractedLastName() : "")).trim();
+            nameMismatch = !normalizeName(extractedName).equals(normalizeName(employeeName));
+        }
+
+        return new PdfExtractionResult(extraction, nameMismatch, employeeName);
+    }
+
+    private static String normalizeName(String name) {
+        return name.toLowerCase().replaceAll("[^a-z]", "");
     }
 }

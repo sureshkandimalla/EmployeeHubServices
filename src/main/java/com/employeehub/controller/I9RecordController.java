@@ -10,7 +10,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 // Form I-9 records — access is locked to HR/IMMIGRATION/ADMIN on every
@@ -71,6 +73,19 @@ public class I9RecordController {
     public ResponseEntity<List<I9Rules.Task>> tasks() {
         requireAccess();
         return ResponseEntity.ok(i9RecordService.openTasksForAllEmployees());
+    }
+
+    // Extraction-only — never persists anything. The frontend uses the
+    // result purely to pre-fill the Add form; the user still reviews and
+    // submits it through the normal create/validate flow above.
+    @PostMapping("/employee/{employeeId}/extractFromPdf")
+    public ResponseEntity<?> extractFromPdf(@PathVariable Long employeeId, @RequestParam("file") MultipartFile file) {
+        requireAccess();
+        try {
+            return ResponseEntity.ok(i9RecordService.extractFromPdf(employeeId, file.getInputStream()));
+        } catch (IOException e) {
+            return ResponseEntity.badRequest().body("Could not read that PDF: " + e.getMessage());
+        }
     }
 
     @GetMapping("/employee/{employeeId}/forCorrection")
