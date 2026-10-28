@@ -11,6 +11,7 @@ public class Project implements Cloneable {
     private String projectName;
     private long employeeId;
     private String employeeName;
+    private String employeeEmail;
     // The employee's own company (e.g. "Intellan Technologies LLC", "Code9
     // LLC") — not to be confused with customerName/client, which are the
     // outside companies this project is delivered for.

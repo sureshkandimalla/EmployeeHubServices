@@ -57,6 +57,7 @@ public class ProjectService {
 		    projectDomain.setBillRate(wage.getWage());
 		    projectDomain.setEmployeeId(project.getEmployee().getEmployeeId());
 		    projectDomain.setEmployeeName(project.getEmployee().getFirstName()+" "+project.getEmployee().getLastName());
+		    projectDomain.setEmployeeEmail(project.getEmployee().getEmailId());
 		    projectDomain.setCompanyName(project.getEmployee().getCompanyName());
 		    projectDomain.setCustomerId(project.getCustomer().getCustomerId());
 		    projectDomain.setCustomerName(project.getCustomer().getCustomerCompanyName());
