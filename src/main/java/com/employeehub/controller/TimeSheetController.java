@@ -51,6 +51,23 @@ public class TimeSheetController {
         return timeSheetService.getByRange(LocalDate.parse(startDate), LocalDate.parse(endDate));
     }
 
+    // One row per employee/assignment/month across every timesheet ever
+    // entered, newest-updated first — backs the Timesheets grid (the
+    // landing view of the Timesheets page).
+    @GetMapping("/summary")
+    public List<Map<String, Object>> getSummary() {
+        return timeSheetService.getTimesheetSummaries();
+    }
+
+    // Every (employee, assignment, month) not yet Approved — missing
+    // entirely, or stuck at Draft/Submitted/Rejected — for every month
+    // from that assignment's start through last month. Backs the Missing
+    // Timesheets report.
+    @GetMapping("/missing")
+    public List<Map<String, Object>> getMissing() {
+        return timeSheetService.getMissingTimesheets();
+    }
+
     @PostMapping("/saveBulk")
     public ResponseEntity<?> saveBulk(@RequestBody List<TimeSheet> entries) {
         CurrentUserContext.requireRole("ADMIN", "ACCOUNTING", "IMMIGRATION");

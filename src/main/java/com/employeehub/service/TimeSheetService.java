@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -57,6 +58,136 @@ public class TimeSheetService {
     // calendar month boundaries (e.g. biweekly).
     public List<TimeSheet> getByRange(LocalDate start, LocalDate end) {
         return timeSheetRepository.findByWorkDateBetweenOrderByWorkDate(start, end);
+    }
+
+    // Approved beats Rejected beats Submitted beats Draft — same
+    // most-restrictive-wins rule TimesheetEntry.jsx already uses for a
+    // single month's status tag, extended with Rejected (not needed there
+    // since that page only ever looks at one assignment/month, where a
+    // reject immediately becomes actionable as Draft-or-Submitted again).
+    private static final List<String> STATUS_PRIORITY = List.of(DRAFT, SUBMITTED, REJECTED, APPROVED);
+
+    private String higherPriorityStatus(String a, String b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return STATUS_PRIORITY.indexOf(b) > STATUS_PRIORITY.indexOf(a) ? b : a;
+    }
+
+    // One row per employee/assignment/month across every timesheet ever
+    // entered — backs the Timesheets grid (the landing view of the
+    // Timesheets page, with "Add New Timesheet" opening the existing
+    // day-by-day entry view for one employee/project/month at a time).
+    public List<Map<String, Object>> getTimesheetSummaries() {
+        List<Object[]> rows = timeSheetRepository.findAllWithNames();
+        Map<String, Map<String, Object>> grouped = new LinkedHashMap<>();
+
+        for (Object[] r : rows) {
+            String firstName = (String) r[0];
+            String lastName = (String) r[1];
+            Long projectId = ((Number) r[2]).longValue();
+            String projectName = (String) r[3];
+            Long assignmentId = ((Number) r[4]).longValue();
+            Long employeeId = ((Number) r[5]).longValue();
+            LocalDate workDate = ((java.sql.Date) r[6]).toLocalDate();
+            float hours = r[7] != null ? ((Number) r[7]).floatValue() : 0f;
+            String status = (String) r[8];
+            LocalDate lastUpdated = r[9] != null ? ((java.sql.Date) r[9]).toLocalDate() : null;
+
+            String yearMonth = YearMonth.from(workDate).toString();
+            String key = assignmentId + "|" + yearMonth;
+
+            Map<String, Object> group = grouped.computeIfAbsent(key, k -> {
+                Map<String, Object> g = new LinkedHashMap<>();
+                g.put("employeeId", employeeId);
+                g.put("employeeName", firstName + " " + lastName);
+                g.put("projectId", projectId);
+                g.put("projectName", projectName);
+                g.put("assignmentId", assignmentId);
+                g.put("yearMonth", yearMonth);
+                g.put("totalHours", 0f);
+                g.put("status", DRAFT);
+                g.put("lastUpdated", null);
+                return g;
+            });
+
+            group.put("totalHours", (Float) group.get("totalHours") + hours);
+            group.put("status", higherPriorityStatus((String) group.get("status"), status));
+            LocalDate groupLastUpdated = (LocalDate) group.get("lastUpdated");
+            if (lastUpdated != null && (groupLastUpdated == null || lastUpdated.isAfter(groupLastUpdated))) {
+                group.put("lastUpdated", lastUpdated);
+            }
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>(grouped.values());
+        result.sort((a, b) -> {
+            LocalDate la = (LocalDate) a.get("lastUpdated");
+            LocalDate lb = (LocalDate) b.get("lastUpdated");
+            if (la == null && lb == null) return 0;
+            if (la == null) return 1;
+            if (lb == null) return -1;
+            return lb.compareTo(la);
+        });
+        return result;
+    }
+
+    // Every (employee, assignment, month) that is NOT fully Approved —
+    // whether that's because no timesheet exists for that month at all, or
+    // one exists but is still Draft/Submitted/Rejected. Walks each
+    // assignment's entire start-to-end window (capped at last month, since
+    // the current month isn't "late" yet) rather than deriving months from
+    // existing timesheet rows the way getTimesheetSummaries does, so a
+    // month with zero entries still shows up here.
+    public List<Map<String, Object>> getMissingTimesheets() {
+        List<Object[]> assignments = assignmentRepository.findAllAssignmentsWithDetails();
+        List<Object[]> timesheetRows = timeSheetRepository.findAllWithNames();
+
+        // assignmentId|yearMonth -> most-restrictive-wins status across
+        // that month's entries (same rule getTimesheetSummaries uses).
+        Map<String, String> statusByKey = new HashMap<>();
+        for (Object[] r : timesheetRows) {
+            Long assignmentId = ((Number) r[4]).longValue();
+            LocalDate workDate = ((java.sql.Date) r[6]).toLocalDate();
+            String status = (String) r[8];
+            String key = assignmentId + "|" + YearMonth.from(workDate);
+            statusByKey.merge(key, status, this::higherPriorityStatus);
+        }
+
+        YearMonth lastCompleteMonth = YearMonth.now().minusMonths(1);
+        List<Map<String, Object>> missing = new ArrayList<>();
+
+        for (Object[] a : assignments) {
+            String firstName = (String) a[0];
+            String lastName = (String) a[1];
+            Long projectId = ((Number) a[2]).longValue();
+            String projectName = (String) a[3];
+            Long assignmentId = ((Number) a[4]).longValue();
+            Long employeeId = ((Number) a[5]).longValue();
+            LocalDate startDate = ((java.sql.Date) a[6]).toLocalDate();
+            LocalDate endDate = a[7] != null ? ((java.sql.Date) a[7]).toLocalDate() : null;
+
+            YearMonth start = YearMonth.from(startDate);
+            YearMonth end = endDate != null ? YearMonth.from(endDate) : lastCompleteMonth;
+            if (end.isAfter(lastCompleteMonth)) end = lastCompleteMonth;
+            if (start.isAfter(end)) continue; // assignment hasn't reached a completed month yet
+
+            for (YearMonth ym = start; !ym.isAfter(end); ym = ym.plusMonths(1)) {
+                String status = statusByKey.get(assignmentId + "|" + ym);
+                if (APPROVED.equals(status)) continue;
+
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("employeeId", employeeId);
+                row.put("employeeName", firstName + " " + lastName);
+                row.put("projectId", projectId);
+                row.put("projectName", projectName);
+                row.put("assignmentId", assignmentId);
+                row.put("yearMonth", ym.toString());
+                row.put("status", status == null ? "No Timesheet" : status);
+                missing.add(row);
+            }
+        }
+
+        missing.sort((x, y) -> ((String) y.get("yearMonth")).compareTo((String) x.get("yearMonth")));
+        return missing;
     }
 
     public static class SaveResult {

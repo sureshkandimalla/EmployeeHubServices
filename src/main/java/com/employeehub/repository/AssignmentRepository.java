@@ -87,4 +87,22 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
             nativeQuery = true)
     List<Object[]> findAssignmentsEligibleForPeriod(LocalDate periodStart, LocalDate periodEnd);
 
+    // Every assignment that has ever existed (no active/date filtering at
+    // all) joined with the employee/project names needed to display it —
+    // backs the Missing Timesheets report, which needs to walk each
+    // assignment's *entire* start-to-end window (including long-finished
+    // ones) to find months with no submitted timesheet, not just its
+    // currently-active state.
+    @Query(value = "select e.first_name as firstName, e.last_name as lastName, "+
+            "p.project_id as projectId, p.project_name as projectName, "+
+            "a.assignment_id as assignmentId, a.employee_id as employeeId, "+
+            "a.start_date as startDate, a.end_date as endDate "+
+            "from assignment a "+
+            "join employees e on a.employee_id = e.employee_id "+
+            "join project p on a.project_id = p.project_id "+
+            "where (e.company_name is null or e.company_name <> 'Referral') "+
+            "and a.start_date is not null",
+            nativeQuery = true)
+    List<Object[]> findAllAssignmentsWithDetails();
+
 }
