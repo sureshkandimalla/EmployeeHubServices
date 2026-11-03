@@ -91,16 +91,19 @@ public class TimeSheetController {
         return ResponseEntity.ok("Submitted " + updated + " day(s) for approval.");
     }
 
+    // Approve/Reopen are ADMIN-only — unlike Save/Submit/Delete, which stay
+    // open to ADMIN/ACCOUNTING/IMMIGRATION, final sign-off and reopening an
+    // already-approved month is restricted narrower on purpose.
     @PostMapping("/approve")
     public ResponseEntity<?> approve(@RequestParam Long assignmentId, @RequestParam String yearMonth) {
-        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING", "IMMIGRATION");
+        CurrentUserContext.requireRole("ADMIN");
         int updated = timeSheetService.approveMonth(assignmentId, YearMonth.parse(yearMonth));
         return ResponseEntity.ok("Approved " + updated + " day(s).");
     }
 
     @PostMapping("/reopen")
     public ResponseEntity<?> reopen(@RequestParam Long assignmentId, @RequestParam String yearMonth) {
-        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING", "IMMIGRATION");
+        CurrentUserContext.requireRole("ADMIN");
         int updated = timeSheetService.reopenMonth(assignmentId, YearMonth.parse(yearMonth));
         return ResponseEntity.ok("Reopened " + updated + " day(s) for editing.");
     }
@@ -117,7 +120,7 @@ public class TimeSheetController {
 
     @PostMapping("/approveRange")
     public ResponseEntity<?> approveRange(@RequestParam Long assignmentId, @RequestParam String startDate, @RequestParam String endDate) {
-        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING", "IMMIGRATION");
+        CurrentUserContext.requireRole("ADMIN");
         int updated = timeSheetService.approveRange(assignmentId, LocalDate.parse(startDate), LocalDate.parse(endDate));
         return ResponseEntity.ok("Approved " + updated + " day(s).");
     }
@@ -131,7 +134,7 @@ public class TimeSheetController {
 
     @PostMapping("/reopenRange")
     public ResponseEntity<?> reopenRange(@RequestParam Long assignmentId, @RequestParam String startDate, @RequestParam String endDate) {
-        CurrentUserContext.requireRole("ADMIN", "ACCOUNTING", "IMMIGRATION");
+        CurrentUserContext.requireRole("ADMIN");
         int updated = timeSheetService.reopenRange(assignmentId, LocalDate.parse(startDate), LocalDate.parse(endDate));
         return ResponseEntity.ok("Reopened " + updated + " day(s) for editing.");
     }
