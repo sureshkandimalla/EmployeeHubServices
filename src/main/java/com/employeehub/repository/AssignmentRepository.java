@@ -96,7 +96,8 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
     @Query(value = "select e.first_name as firstName, e.last_name as lastName, "+
             "p.project_id as projectId, p.project_name as projectName, "+
             "a.assignment_id as assignmentId, a.employee_id as employeeId, "+
-            "a.start_date as startDate, a.end_date as endDate "+
+            "a.start_date as startDate, a.end_date as endDate, "+
+            "e.email_id as employeeEmail "+
             "from assignment a "+
             "join employees e on a.employee_id = e.employee_id "+
             "join project p on a.project_id = p.project_id "+

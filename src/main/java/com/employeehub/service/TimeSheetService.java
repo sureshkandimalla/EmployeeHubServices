@@ -92,6 +92,7 @@ public class TimeSheetService {
             float hours = r[7] != null ? ((Number) r[7]).floatValue() : 0f;
             String status = (String) r[8];
             LocalDate lastUpdated = r[9] != null ? ((java.sql.Date) r[9]).toLocalDate() : null;
+            String employeeEmail = (String) r[10];
 
             String yearMonth = YearMonth.from(workDate).toString();
             String key = assignmentId + "|" + yearMonth;
@@ -100,6 +101,7 @@ public class TimeSheetService {
                 Map<String, Object> g = new LinkedHashMap<>();
                 g.put("employeeId", employeeId);
                 g.put("employeeName", firstName + " " + lastName);
+                g.put("employeeEmail", employeeEmail);
                 g.put("projectId", projectId);
                 g.put("projectName", projectName);
                 g.put("assignmentId", assignmentId);
@@ -164,6 +166,7 @@ public class TimeSheetService {
             Long employeeId = ((Number) a[5]).longValue();
             LocalDate startDate = ((java.sql.Date) a[6]).toLocalDate();
             LocalDate endDate = a[7] != null ? ((java.sql.Date) a[7]).toLocalDate() : null;
+            String employeeEmail = (String) a[8];
 
             YearMonth start = YearMonth.from(startDate);
             YearMonth end = endDate != null ? YearMonth.from(endDate) : lastCompleteMonth;
@@ -177,6 +180,7 @@ public class TimeSheetService {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("employeeId", employeeId);
                 row.put("employeeName", firstName + " " + lastName);
+                row.put("employeeEmail", employeeEmail);
                 row.put("projectId", projectId);
                 row.put("projectName", projectName);
                 row.put("assignmentId", assignmentId);
