@@ -33,6 +33,8 @@ public class Bills {
   private LocalDate paymentDate;
   private String status;
   private String billType;
+  private float discount;
+  private String comments;
   
   
 @Override

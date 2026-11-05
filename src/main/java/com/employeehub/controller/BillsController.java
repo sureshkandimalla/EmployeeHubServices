@@ -80,7 +80,7 @@ public class BillsController {
 
 	@PutMapping("/{id}")
 	public ResponseEntity<Bills> updateBill(@PathVariable Long id, @RequestBody Bills billDetails) throws BillsException {
-		CurrentUserContext.requireRole("ADMIN", "ACCOUNTING");
+		CurrentUserContext.requireRole("ADMIN", "HR", "ACCOUNTING");
 		Bills updatedBill = billsService.updateBill(id, billDetails);
 		return ResponseEntity.ok(updatedBill);
 	}

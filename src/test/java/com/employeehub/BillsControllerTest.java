@@ -186,9 +186,21 @@ class BillsControllerTest {
     }
 
     @Test
-    @DisplayName("PUT /bills/{id}: returns 403 when an HR user tries to edit a bill")
-    void updateBill_forbiddenForHr() throws Exception {
+    @DisplayName("PUT /bills/{id}: allows an HR user to edit a bill")
+    void updateBill_allowedForHr() throws Exception {
         CurrentUserContext.set("hr@example.com", "HR");
+        when(billsService.updateBill(eq(1L), any())).thenReturn(bill(1L, 100L, 11L, "Paid", 160f, 8000f));
+
+        mockMvc.perform(put("/api/v1/bills/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(bill(1L, 100L, 11L, "Paid", 160f, 8000f))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("PUT /bills/{id}: returns 403 when an Immigration user tries to edit a bill")
+    void updateBill_forbiddenForImmigration() throws Exception {
+        CurrentUserContext.set("immi@example.com", "IMMIGRATION");
 
         mockMvc.perform(put("/api/v1/bills/1")
                         .contentType(MediaType.APPLICATION_JSON)
