@@ -106,4 +106,23 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
             nativeQuery = true)
     List<Object[]> findAllAssignmentsWithDetails();
 
+    // Same as findAllAssignmentsWithDetails, plus the owning project's
+    // invoice-frequency settings — backs the Timesheet vs Invoice (by
+    // Invoice Frequency) report, which needs each assignment's actual
+    // billing period length (Weekly/Biweekly/Monthly/...) rather than
+    // assuming a calendar month.
+    @Query(value = "select e.first_name as firstName, e.last_name as lastName, "+
+            "p.project_id as projectId, p.project_name as projectName, "+
+            "a.assignment_id as assignmentId, a.employee_id as employeeId, "+
+            "a.start_date as startDate, a.end_date as endDate, "+
+            "e.email_id as employeeEmail, "+
+            "p.invoice_term as invoiceTerm, p.week_start_day as weekStartDay "+
+            "from assignment a "+
+            "join employees e on a.employee_id = e.employee_id "+
+            "join project p on a.project_id = p.project_id "+
+            "where (e.company_name is null or e.company_name <> 'Referral') "+
+            "and a.start_date is not null",
+            nativeQuery = true)
+    List<Object[]> findAllAssignmentsWithInvoiceTerm();
+
 }

@@ -68,6 +68,15 @@ public class TimeSheetController {
         return timeSheetService.getMissingTimesheets();
     }
 
+    // One row per (employee, assignment, invoice period), bucketed by each
+    // project's own invoice frequency rather than a calendar month, with
+    // the matching Invoice (if any) attached — backs the "By Invoice
+    // Frequency" tab on the Timesheets page.
+    @GetMapping("/byInvoiceFrequency")
+    public List<Map<String, Object>> getByInvoiceFrequency() {
+        return timeSheetService.getTimesheetsByInvoiceFrequency();
+    }
+
     @PostMapping("/saveBulk")
     public ResponseEntity<?> saveBulk(@RequestBody List<TimeSheet> entries) {
         CurrentUserContext.requireRole("ADMIN", "ACCOUNTING", "IMMIGRATION");

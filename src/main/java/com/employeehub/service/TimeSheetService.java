@@ -1,14 +1,19 @@
 package com.employeehub.service;
 
 import com.employeehub.model.Assignment;
+import com.employeehub.model.Invoice;
 import com.employeehub.model.TimeSheet;
 import com.employeehub.repository.AssignmentRepository;
+import com.employeehub.repository.InvoiceRepository;
 import com.employeehub.repository.TimeSheetRepository;
+import com.employeehub.util.InvoicePeriodCalculator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -29,6 +34,9 @@ public class TimeSheetService {
 
     @Autowired
     private AssignmentRepository assignmentRepository;
+
+    @Autowired
+    private InvoiceRepository invoiceRepository;
 
     public List<TimeSheet> getByAssignmentAndMonth(Long assignmentId, YearMonth month) {
         return timeSheetRepository.findByAssignmentIdAndWorkDateBetweenOrderByWorkDate(
@@ -192,6 +200,157 @@ public class TimeSheetService {
 
         missing.sort((x, y) -> ((String) y.get("yearMonth")).compareTo((String) x.get("yearMonth")));
         return missing;
+    }
+
+    // Mirrors the frontend's INVOICE_TERM_OPTIONS (src/Utils/invoiceTerm.js)
+    // — the numeric code is the only thing actually stored, this is purely
+    // a display label for this report's response.
+    private static final Map<String, String> INVOICE_TERM_LABELS = Map.of(
+            "1", "Weekly",
+            "2", "Biweekly",
+            "3", "Monthly",
+            "4", "Special",
+            "5", "Semi-Monthly",
+            "6", "Once in 4 Weeks");
+
+    // Only Submitted/Approved entries count as "confirmed" hours for this
+    // comparison — same convention GenerateInvoiceDetails.jsx's
+    // populateHoursFromTimesheets already uses when pulling timesheet hours
+    // into a not-yet-invoiced period.
+    private static boolean isConfirmedStatus(String status) {
+        return SUBMITTED.equals(status) || APPROVED.equals(status);
+    }
+
+    // One row per (employee, assignment, invoice period), bucketed by each
+    // project's own invoice frequency (Weekly/Biweekly/Monthly/...) instead
+    // of a calendar month, with the matching Invoice (if any) attached for
+    // direct comparison. Backs the "By Invoice Frequency" tab on the
+    // Timesheets page.
+    public List<Map<String, Object>> getTimesheetsByInvoiceFrequency() {
+        List<Object[]> assignments = assignmentRepository.findAllAssignmentsWithInvoiceTerm();
+        List<Object[]> timesheetRows = timeSheetRepository.findAllWithNames();
+
+        // assignmentId -> that assignment's timesheet entries, so each
+        // period only has to scan its own assignment's rows, not every
+        // timesheet in the system.
+        Map<Long, List<Object[]>> timesheetsByAssignment = new HashMap<>();
+        for (Object[] r : timesheetRows) {
+            Long assignmentId = ((Number) r[4]).longValue();
+            timesheetsByAssignment.computeIfAbsent(assignmentId, k -> new ArrayList<>()).add(r);
+        }
+
+        // projectId -> that project's invoices, fetched once up front
+        // rather than once per assignment.
+        Map<Long, List<Invoice>> invoicesByProject = new HashMap<>();
+        for (Invoice invoice : invoiceRepository.findAll()) {
+            if (invoice.getProjectId() != null) {
+                invoicesByProject.computeIfAbsent(invoice.getProjectId(), k -> new ArrayList<>()).add(invoice);
+            }
+        }
+
+        DateTimeFormatter yearMonthFormatter = DateTimeFormatter.ofPattern("yyyy-MM");
+        LocalDate today = LocalDate.now();
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (Object[] a : assignments) {
+            String firstName = (String) a[0];
+            String lastName = (String) a[1];
+            Long projectId = ((Number) a[2]).longValue();
+            String projectName = (String) a[3];
+            Long assignmentId = ((Number) a[4]).longValue();
+            Long employeeId = ((Number) a[5]).longValue();
+            LocalDate startDate = ((java.sql.Date) a[6]).toLocalDate();
+            LocalDate endDate = a[7] != null ? ((java.sql.Date) a[7]).toLocalDate() : null;
+            String employeeEmail = (String) a[8];
+            String invoiceTerm = (String) a[9];
+            DayOfWeek weekStartDay = InvoicePeriodCalculator.resolveWeekStartDay((String) a[10]);
+
+            LocalDate rangeEnd = (endDate == null || endDate.isAfter(today)) ? today : endDate;
+            if (startDate.isAfter(rangeEnd)) continue;
+
+            List<InvoicePeriodCalculator.Period> periods = InvoicePeriodCalculator.computePeriods(
+                    startDate, rangeEnd, invoiceTerm, weekStartDay);
+            List<Object[]> assignmentTimesheets = timesheetsByAssignment.getOrDefault(assignmentId, List.of());
+            List<Invoice> projectInvoices = invoicesByProject.getOrDefault(projectId, List.of());
+
+            for (InvoicePeriodCalculator.Period period : periods) {
+                // Only periods that have fully ended — an in-progress period
+                // hasn't been (and shouldn't yet be) invoiced, so flagging it
+                // as "No Invoice Yet" would just be noise.
+                if (period.end.isAfter(today)) continue;
+
+                float timesheetHours = 0f;
+                String timesheetStatus = null;
+                for (Object[] ts : assignmentTimesheets) {
+                    LocalDate workDate = ((java.sql.Date) ts[6]).toLocalDate();
+                    if (workDate.isBefore(period.start) || workDate.isAfter(period.end)) continue;
+                    String status = (String) ts[8];
+                    if (isConfirmedStatus(status)) {
+                        float hours = ts[7] != null ? ((Number) ts[7]).floatValue() : 0f;
+                        timesheetHours += hours;
+                    }
+                    timesheetStatus = higherPriorityStatus(timesheetStatus, status);
+                }
+
+                Optional<Invoice> matched = projectInvoices.stream()
+                        .filter(invoice -> period.start.equals(invoice.getStartDate()))
+                        .findAny();
+                boolean isMonthlyBucketing = !List.of("1", "2", "5", "6").contains(invoiceTerm);
+                if (matched.isEmpty() && isMonthlyBucketing) {
+                    // Legacy fallback for Monthly (and the Monthly-fallback
+                    // "Special"/unrecognized terms) only, matching
+                    // InvoiceRepository#findByProjectIdAndInvoiceMonth's own
+                    // documented "kept for reference/compat" rule — some
+                    // older Monthly invoices predate exact start-date
+                    // matching and only have invoiceMonth set correctly.
+                    String targetMonth = period.start.format(yearMonthFormatter);
+                    matched = projectInvoices.stream()
+                            .filter(invoice -> invoice.getInvoiceMonth() != null
+                                    && invoice.getInvoiceMonth().format(yearMonthFormatter).equals(targetMonth))
+                            .findAny();
+                }
+
+                float invoicedHours = matched.map(Invoice::getHours).orElse(0f);
+                float variance = timesheetHours - invoicedHours;
+                String comparisonStatus;
+                if (matched.isEmpty()) {
+                    comparisonStatus = timesheetHours > 0f ? "No Invoice Yet" : "Matched";
+                } else if (Math.abs(variance) > 0.01f) {
+                    comparisonStatus = "Hours Mismatch";
+                } else {
+                    comparisonStatus = "Matched";
+                }
+
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("employeeId", employeeId);
+                row.put("employeeName", firstName + " " + lastName);
+                row.put("employeeEmail", employeeEmail);
+                row.put("projectId", projectId);
+                row.put("projectName", projectName);
+                row.put("assignmentId", assignmentId);
+                // The month to pre-select when jumping to the day-by-day
+                // Timesheet Entry view (TimesheetEntry.jsx only understands
+                // a single calendar month) — the period's start date's
+                // month, same approximation GenerateInvoiceDetails' own
+                // "Timesheet" link already makes for non-Monthly terms.
+                row.put("yearMonth", YearMonth.from(period.start).toString());
+                row.put("invoiceFrequency", INVOICE_TERM_LABELS.getOrDefault(invoiceTerm, "Monthly"));
+                row.put("periodStart", period.start.toString());
+                row.put("periodEnd", period.end.toString());
+                row.put("timesheetHours", timesheetHours);
+                row.put("timesheetStatus", timesheetStatus == null ? "No Timesheet" : timesheetStatus);
+                row.put("invoiceId", matched.map(Invoice::getId).orElse(null));
+                row.put("invoiceNumber", matched.map(Invoice::getInvoiceNumber).orElse(null));
+                row.put("invoicedHours", invoicedHours);
+                row.put("invoiceStatus", matched.map(Invoice::getStatus).orElse(null));
+                row.put("variance", variance);
+                row.put("comparisonStatus", comparisonStatus);
+                result.add(row);
+            }
+        }
+
+        result.sort((x, y) -> ((String) y.get("periodStart")).compareTo((String) x.get("periodStart")));
+        return result;
     }
 
     public static class SaveResult {
