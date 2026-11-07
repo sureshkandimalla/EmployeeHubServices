@@ -23,12 +23,20 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
 /**
- * getTimesheetsByInvoiceFrequency backs the "By Invoice Frequency" tab on
- * the Timesheets page — one row per (employee, assignment, invoice period),
- * bucketed by the project's own invoice term instead of a calendar month,
- * compared against any matching Invoice. Dates are fixed in 2020 rather than
- * relative to "today" so these periods always land safely in the past no
- * matter when the suite runs.
+ * Covers TimeSheetService's three read-aggregation methods — all pure
+ * grouping/bucketing logic over native-query rows, with no DB of their own
+ * to assert against:
+ *   - getTimesheetSummaries(): one row per (employee, assignment, month)
+ *     across every timesheet ever entered — backs the Timesheets grid.
+ *   - getMissingTimesheets(): one row per (employee, assignment, month)
+ *     NOT fully Approved, including months with zero entries — backs the
+ *     Unsubmitted Timesheets report.
+ *   - getTimesheetsByInvoiceFrequency(): one row per (employee, assignment,
+ *     invoice period), bucketed by the project's own invoice term instead
+ *     of a calendar month, compared against any matching Invoice — backs
+ *     the "By Invoice Frequency" tab on the Timesheets page.
+ * Dates are fixed in 2020 rather than relative to "today" so these periods
+ * always land safely in the past no matter when the suite runs.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -57,6 +65,15 @@ class TimeSheetServiceTest {
             LocalDate workDate, float hours, String status) {
         return new Object[]{"Jane", "Doe", projectId, projectName, assignmentId, employeeId,
                 Date.valueOf(workDate), hours, status, Date.valueOf(workDate), "jane@example.com"};
+    }
+
+    // findAllAssignmentsWithDetails() row shape — no invoiceTerm/weekStartDay
+    // (getMissingTimesheets doesn't need either, unlike
+    // findAllAssignmentsWithInvoiceTerm() above).
+    private Object[] assignmentDetailsRow(String firstName, String lastName, long projectId, String projectName,
+            long assignmentId, long employeeId, LocalDate start, LocalDate end, String email) {
+        return new Object[]{firstName, lastName, projectId, projectName, assignmentId, employeeId,
+                Date.valueOf(start), end == null ? null : Date.valueOf(end), email};
     }
 
     private Invoice invoice(long id, long projectId, LocalDate startDate, LocalDate endDate, float hours, String status) {
@@ -151,5 +168,52 @@ class TimeSheetServiceTest {
         assertEquals("Draft", rows.get(0).get("timesheetStatus"));
         // Zero confirmed hours and no invoice — nothing to flag yet.
         assertEquals("Matched", rows.get(0).get("comparisonStatus"));
+    }
+
+    @Test
+    @DisplayName("getTimesheetSummaries: groups by assignment+month, sums hours, most-restrictive status wins")
+    void getTimesheetSummaries_groupsByAssignmentAndMonth() {
+        when(timeSheetRepository.findAllWithNames()).thenReturn(List.<Object[]>of(
+                timesheetRow(10, "ProjA", 1, 100, LocalDate.of(2026, 1, 5), 4f, "Draft"),
+                timesheetRow(10, "ProjA", 1, 100, LocalDate.of(2026, 1, 10), 4f, "Submitted"),
+                timesheetRow(10, "ProjA", 1, 100, LocalDate.of(2026, 2, 1), 8f, "Approved")));
+
+        List<Map<String, Object>> rows = timeSheetService.getTimesheetSummaries();
+        assertEquals(2, rows.size());
+
+        Map<String, Object> jan = rows.stream().filter(r -> "2026-01".equals(r.get("yearMonth"))).findFirst().orElseThrow();
+        assertEquals(8f, (Float) jan.get("totalHours")); // 4 + 4, regardless of status
+        assertEquals("Submitted", jan.get("status")); // Submitted outranks Draft
+        assertEquals("Jane Doe", jan.get("employeeName"));
+        assertEquals("ProjA", jan.get("projectName"));
+
+        Map<String, Object> feb = rows.stream().filter(r -> "2026-02".equals(r.get("yearMonth"))).findFirst().orElseThrow();
+        assertEquals(8f, (Float) feb.get("totalHours"));
+        assertEquals("Approved", feb.get("status"));
+    }
+
+    @Test
+    @DisplayName("getMissingTimesheets: skips Approved months, flags Submitted and zero-entry months")
+    void getMissingTimesheets_flagsEveryNonApprovedMonthInTheAssignmentWindow() {
+        when(assignmentRepository.findAllAssignmentsWithDetails()).thenReturn(List.<Object[]>of(
+                assignmentDetailsRow("Jane", "Doe", 10, "ProjA", 1, 100,
+                        LocalDate.of(2020, 1, 1), LocalDate.of(2020, 3, 31), "jane@example.com")));
+
+        when(timeSheetRepository.findAllWithNames()).thenReturn(List.<Object[]>of(
+                timesheetRow(10, "ProjA", 1, 100, LocalDate.of(2020, 1, 15), 8f, "Approved"),
+                timesheetRow(10, "ProjA", 1, 100, LocalDate.of(2020, 2, 15), 8f, "Submitted")));
+        // March has zero timesheet rows at all.
+
+        List<Map<String, Object>> rows = timeSheetService.getMissingTimesheets();
+
+        assertTrue(rows.stream().noneMatch(r -> "2020-01".equals(r.get("yearMonth"))), "Approved month must not be flagged");
+
+        Map<String, Object> feb = rows.stream().filter(r -> "2020-02".equals(r.get("yearMonth"))).findFirst().orElseThrow();
+        assertEquals("Submitted", feb.get("status"));
+
+        Map<String, Object> mar = rows.stream().filter(r -> "2020-03".equals(r.get("yearMonth"))).findFirst().orElseThrow();
+        assertEquals("No Timesheet", mar.get("status"));
+
+        assertEquals(2, rows.size());
     }
 }
