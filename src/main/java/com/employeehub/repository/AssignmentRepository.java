@@ -93,6 +93,17 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
     // assignment's *entire* start-to-end window (including long-finished
     // ones) to find months with no submitted timesheet, not just its
     // currently-active state.
+    //
+    // Restricted to assignment_type = EMP_PAY: that's the only type an
+    // employee actually logs timesheets against (see WageType) — EMP_REF
+    // (referral) and the other types exist purely to generate a Bill from
+    // the EMP_PAY assignment's own hours, and never carry their own
+    // timesheet entries. Without this filter, a project with a side-pay
+    // assignment (e.g. a referral bonus) alongside the real EMP_PAY one
+    // gets a second, permanently-empty "missing timesheet" row every
+    // month for the side-pay assignment, which is never actually missing
+    // anything — it was never supposed to have timesheets in the first
+    // place.
     @Query(value = "select e.first_name as firstName, e.last_name as lastName, "+
             "p.project_id as projectId, p.project_name as projectName, "+
             "a.assignment_id as assignmentId, a.employee_id as employeeId, "+
@@ -102,7 +113,8 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
             "join employees e on a.employee_id = e.employee_id "+
             "join project p on a.project_id = p.project_id "+
             "where (e.company_name is null or e.company_name <> 'Referral') "+
-            "and a.start_date is not null",
+            "and a.start_date is not null "+
+            "and a.assignment_type = 'EMP_PAY'",
             nativeQuery = true)
     List<Object[]> findAllAssignmentsWithDetails();
 
@@ -110,7 +122,8 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
     // invoice-frequency settings — backs the Timesheet vs Invoice (by
     // Invoice Frequency) report, which needs each assignment's actual
     // billing period length (Weekly/Biweekly/Monthly/...) rather than
-    // assuming a calendar month.
+    // assuming a calendar month. Same EMP_PAY-only restriction and reason
+    // as findAllAssignmentsWithDetails above.
     @Query(value = "select e.first_name as firstName, e.last_name as lastName, "+
             "p.project_id as projectId, p.project_name as projectName, "+
             "a.assignment_id as assignmentId, a.employee_id as employeeId, "+
@@ -121,7 +134,8 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
             "join employees e on a.employee_id = e.employee_id "+
             "join project p on a.project_id = p.project_id "+
             "where (e.company_name is null or e.company_name <> 'Referral') "+
-            "and a.start_date is not null",
+            "and a.start_date is not null "+
+            "and a.assignment_type = 'EMP_PAY'",
             nativeQuery = true)
     List<Object[]> findAllAssignmentsWithInvoiceTerm();
 
